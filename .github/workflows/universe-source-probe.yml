@@ -21,7 +21,6 @@ jobs:
             console.log("\nNEEDLE",needle,"INDEX",i);
             if(i>=0) console.log(html.slice(Math.max(0,i-700),Math.min(html.length,i+1400)));
           }
-          const anchors=[...html.matchAll(/<a\\b[^>]*href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/gi)];
-          console.log("ANCHOR_COUNT",anchors.length);
-          console.log("STOCK_LINKS",anchors.filter(x=>/\\/stocks\\//.test(x[1])).slice(0,12).map(x=>({href:x[1],text:x[2].replace(/<[^>]*>/g," ").replace(/\\s+/g," ").trim().slice(0,160)})));
+          console.log("ANCHOR_TAGS", (html.match(/<a/g)||[]).length);
+          console.log("HAS_STOCKS",html.includes("WELCORP"),html.includes("RBLBANK"),html.includes("Ather Energy"));
           NODE
