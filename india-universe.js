@@ -169,9 +169,85 @@
   $("indiaClearSelection").addEventListener("click", function () { selected.clear(); renderList(); });
 
   const datalist = $("tickerSuggestions");
-  if (datalist) datalist.innerHTML = stocks.map(function (s) {
-    return '<option value="' + escapeHTML(s.yahoo) + '">' + escapeHTML(s.company) + '</option>';
-  }).join("");
+  if (datalist) datalist.remove();
+  const tickerInput = $("ticker");
+  const tickerWrap = tickerInput.closest(".ticker-wrap");
+  tickerInput.removeAttribute("list");
+  const tickerMenu = document.createElement("div");
+  tickerMenu.id = "tickerAutocomplete";
+  tickerMenu.className = "ticker-autocomplete";
+  tickerMenu.setAttribute("role", "listbox");
+  tickerMenu.hidden = true;
+  tickerWrap.appendChild(tickerMenu);
+  const tickerHint = document.createElement("div");
+  tickerHint.className = "ticker-selection-hint";
+  tickerHint.id = "tickerSelectionHint";
+  tickerHint.textContent = "Search 100 Indian companies by name or NSE symbol";
+  tickerWrap.appendChild(tickerHint);
+  let activeTickerOption = -1;
+  let visibleTickerOptions = [];
+  function rankedTickerMatches(query) {
+    const q = query.trim().toLowerCase();
+    const matches = stocks.filter(function (s) {
+      return !q || (s.symbol + " " + s.company + " " + s.sector).toLowerCase().indexOf(q) >= 0;
+    });
+    matches.sort(function (a,b) {
+      if (!q) return a.company.localeCompare(b.company);
+      const aRank = a.symbol.toLowerCase() === q ? 0 : a.symbol.toLowerCase().startsWith(q) ? 1 : a.company.toLowerCase().startsWith(q) ? 2 : 3;
+      const bRank = b.symbol.toLowerCase() === q ? 0 : b.symbol.toLowerCase().startsWith(q) ? 1 : b.company.toLowerCase().startsWith(q) ? 2 : 3;
+      return aRank-bRank || a.company.localeCompare(b.company);
+    });
+    return matches.slice(0,8);
+  }
+  function chooseTicker(stock) {
+    tickerInput.value = stock.yahoo;
+    tickerInput.dataset.selectedSymbol = stock.symbol;
+    tickerHint.textContent = stock.company + " · " + stock.sector + " · NSE / INR";
+    tickerHint.classList.add("selected");
+    tickerMenu.hidden = true;
+    tickerInput.setAttribute("aria-expanded","false");
+    tickerInput.setAttribute("aria-activedescendant","");
+    activeTickerOption = -1;
+    tickerInput.dispatchEvent(new Event("change",{bubbles:true}));
+  }
+  function paintTickerMenu() {
+    visibleTickerOptions = rankedTickerMatches(tickerInput.value.replace(/\.NS$/i,""));
+    activeTickerOption = -1;
+    tickerMenu.innerHTML = visibleTickerOptions.map(function (s,i) {
+      return '<button type="button" class="ticker-option" role="option" aria-selected="false" data-index="'+i+'"><span class="ticker-option-name">'+escapeHTML(s.company)+'</span><span class="ticker-option-meta"><b>'+escapeHTML(s.symbol)+'.NS</b><small>'+escapeHTML(s.sector)+'</small></span></button>';
+    }).join("") || '<div class="ticker-no-match">No Nifty 100 match. Check the spelling or search by NSE symbol.</div>';
+    tickerMenu.hidden = false;
+    tickerInput.setAttribute("aria-expanded","true");
+    tickerMenu.querySelectorAll(".ticker-option").forEach(function (button) {
+      button.addEventListener("mousedown",function (event) { event.preventDefault(); });
+      button.addEventListener("click",function () { chooseTicker(visibleTickerOptions[Number(button.dataset.index)]); });
+    });
+  }
+  function setActiveTicker(index) {
+    activeTickerOption = Math.max(0,Math.min(index,visibleTickerOptions.length-1));
+    tickerMenu.querySelectorAll(".ticker-option").forEach(function (button,i) {
+      button.classList.toggle("active",i===activeTickerOption);
+      button.setAttribute("aria-selected",i===activeTickerOption?"true":"false");
+    });
+    const active = tickerMenu.querySelectorAll(".ticker-option")[activeTickerOption];
+    if (active) tickerInput.setAttribute("aria-activedescendant",active.id || "");
+  }
+  tickerInput.addEventListener("focus",paintTickerMenu);
+  tickerInput.addEventListener("input",function () {
+    tickerInput.dataset.selectedSymbol = "";
+    tickerHint.textContent = "Choose a company from the suggestions before fetching data";
+    tickerHint.classList.remove("selected");
+    paintTickerMenu();
+  });
+  tickerInput.addEventListener("keydown",function (event) {
+    if (event.key==="ArrowDown") { event.preventDefault(); if(tickerMenu.hidden)paintTickerMenu(); if(visibleTickerOptions.length)setActiveTicker(activeTickerOption+1); }
+    else if (event.key==="ArrowUp") { event.preventDefault(); if(visibleTickerOptions.length)setActiveTicker(activeTickerOption<=0?0:activeTickerOption-1); }
+    else if (event.key==="Enter"&&!tickerMenu.hidden) { if(visibleTickerOptions.length){event.preventDefault();chooseTicker(visibleTickerOptions[activeTickerOption<0?0:activeTickerOption]);} }
+    else if (event.key==="Escape") { tickerMenu.hidden=true;tickerInput.setAttribute("aria-expanded","false"); }
+  });
+  tickerInput.addEventListener("blur",function () { setTimeout(function(){tickerMenu.hidden=true;tickerInput.setAttribute("aria-expanded","false");},140); });
+  document.addEventListener("click",function(event){if(!tickerWrap.contains(event.target)){tickerMenu.hidden=true;tickerInput.setAttribute("aria-expanded","false");}});
+
   const source = $("source");
   if (source) source.innerHTML = '<option value="yahoo">Yahoo Finance · Indian NSE symbols</option><option value="sample">Synthetic demo data</option>';
   const tickerLabel = $("ticker") && $("ticker").closest("label");
