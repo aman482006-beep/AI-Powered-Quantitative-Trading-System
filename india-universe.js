@@ -223,7 +223,7 @@
   const tickerHint = document.createElement("div");
   tickerHint.className = "ticker-selection-hint";
   tickerHint.id = "tickerSelectionHint";
-  tickerHint.textContent = "Search 100 Indian companies by name or NSE symbol";
+  tickerHint.textContent = "Search 600 Indian companies by name or NSE symbol";
   tickerWrap.appendChild(tickerHint);
   let activeTickerOption = -1;
   let visibleTickerOptions = [];
@@ -256,7 +256,7 @@
     activeTickerOption = -1;
     tickerMenu.innerHTML = visibleTickerOptions.map(function (s,i) {
       return '<button type="button" id="ticker-option-'+i+'" class="ticker-option" role="option" aria-selected="false" data-index="'+i+'"><span class="ticker-option-name">'+escapeHTML(s.company)+'</span><span class="ticker-option-meta"><b>'+escapeHTML(s.symbol)+'.NS</b><small>'+escapeHTML(s.sector)+'</small></span></button>';
-    }).join("") || '<div class="ticker-no-match">No Nifty 100 match. Check the spelling or search by NSE symbol.</div>';
+    }).join("") || '<div class="ticker-no-match">No Indian-company match. Check the spelling or search by NSE symbol.</div>';
     tickerMenu.hidden = false;
     tickerInput.setAttribute("aria-expanded","true");
     tickerMenu.querySelectorAll(".ticker-option").forEach(function (button) {
