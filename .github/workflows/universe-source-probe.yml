@@ -1,32 +1,33 @@
-name: Check midcap and largecap source classes
+name: Export adjacent market-cap classes
 on:
   push:
     paths:
       - '.github/workflows/universe-source-probe.yml'
 jobs:
-  inspect:
+  export:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect market-cap classes
+      - name: Extract large and mid-cap source rows
         run: |
           node --input-type=module <<'NODE'
-          function extractRows(html){
-            const chunks=[];
-            for(const m of html.matchAll(/self\.__next_f\.push\(\[1,("(?:\\.|[^"\\])*")\]\)/g)){try{chunks.push(JSON.parse(m[1]))}catch{}}
-            const data=chunks.join("\n"),mark='"rows":',at=data.indexOf(mark);
-            if(at<0)throw Error("rows missing");
-            const start=at+mark.length;let d=0,q=false,e=false,end=-1;
-            for(let i=start;i<data.length;i++){const c=data[i];if(q){if(e)e=false;else if(c==="\\")e=true;else if(c==='"')q=false;continue}if(c==='"'){q=true;continue}if(c==="[")d++;else if(c==="]"&&--d===0){end=i+1;break}}
-            return JSON.parse(data.slice(start,end));
+          async function extract(cls){
+            const html=await (await fetch("https://stockexact.com/stocks/"+cls,{headers:{"User-Agent":"Mozilla/5.0"}})).text();
+            const flight=[];
+            for(const m of html.matchAll(/self\.__next_f\.push\(\[1,("(?:\\.|[^"\\])*")\]\)/g)){try{flight.push(JSON.parse(m[1]))}catch{}}
+            const data=flight.join("\n"),mark='"rows":',at=data.indexOf(mark);
+            if(at<0)throw Error("rows missing for "+cls);
+            const start=at+mark.length;let depth=0,inString=false,escape=false,end=-1;
+            for(let i=start;i<data.length;i++){const c=data[i];if(inString){if(escape)escape=false;else if(c==="\\")escape=true;else if(c==='"')inString=false;continue}if(c==='"'){inString=true;continue}if(c==="[")depth++;else if(c==="]"&&--depth===0){end=i+1;break}}
+            const raw=JSON.parse(data.slice(start,end));
+            const date=html.match(/By market cap at the close on ([^.]+)\./)?.[1]||"unknown";
+            const window=html.match(/average market cap over the six months to ([^,<]+)/)?.[1]||"unknown";
+            const decode=s=>String(s||"").replace(/&amp;/g,"&").replace(/&#x27;|&#39;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,"<").replace(/&gt;/g,">");
+            return {className:cls,marketCapDate:date,classificationWindow:window,rows:raw.map((r,i)=>({sourceClass:cls,sourceClassRow:i+1,symbol:String(r[1]||"").trim().toUpperCase(),company:decode(r[2]),sector:decode(r[5]),marketCapCr:Number(r[8]),lastClosePriceINR:Number(r[6])||null}))};
           }
-          for(const cls of ["mid-cap","large-cap"]){
-            const url="https://stockexact.com/stocks/"+cls;
-            const res=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0"}});
-            const html=await res.text(),rows=extractRows(html);
-            console.log("CLASS",cls,"HTTP",res.status,"ROWS",rows.length,"FIRST",JSON.stringify(rows.slice(0,3).map(r=>({symbol:r[1],name:r[2],mcap:r[8]}))),"LAST",JSON.stringify(rows.slice(-3).map(r=>({symbol:r[1],name:r[2],mcap:r[8]}))));
-            const date=html.match(/By market cap at the close on ([^.]+)\./)?.[1];
-            const method=html.match(/average market cap over the six months to ([^<,]+)/)?.[1];
-            console.log("DATE",date,"WINDOW",method);
-          }
+          const payload={mid:await extract("mid-cap"),large:await extract("large-cap")};
+          console.log("JSON_BEGIN");
+          console.log(JSON.stringify(payload));
+          console.log("JSON_END");
+          console.log("COUNTS",JSON.stringify({mid:payload.mid.rows.length,large:payload.large.rows.length,dates:[payload.mid.marketCapDate,payload.large.marketCapDate],windows:[payload.mid.classificationWindow,payload.large.classificationWindow]}));
           NODE
