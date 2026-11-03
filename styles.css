@@ -97,3 +97,15 @@
 @keyframes quantMetricReveal{from{opacity:.25;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:760px){.run-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.run-monitor-head{align-items:flex-start}.run-graph-head{font-size:7px}}
 @media(max-width:420px){.run-stats b{font-size:13px}.run-steps{display:grid;grid-template-columns:1fr 1fr}.ticker-option{align-items:flex-start;flex-direction:column;gap:5px}.ticker-option-meta{align-items:flex-start}}
+
+/* Expanded 600-stock India universe */
+.india-snapshot-strip{display:flex;gap:10px 22px;flex-wrap:wrap;padding:11px 13px;margin:14px 0 16px;background:#0a141f;border:1px solid #26374a;border-radius:6px;color:#8fa0b3;font:9px var(--mono);letter-spacing:.2px}
+.india-snapshot-strip b{color:#b1f36c;font-weight:600}
+.india-toolbar{grid-template-columns:minmax(180px,2fr) repeat(5,minmax(110px,1fr))}
+.india-stock-main{gap:4px}
+.india-stock-main small{font-size:8px}
+.india-cap-rank{font:8px var(--mono);color:#ffb86b;letter-spacing:.4px}
+.india-stock-sector{font-size:8px}
+@media(max-width:1250px){.india-toolbar{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.india-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:420px){.india-toolbar{grid-template-columns:1fr}}
