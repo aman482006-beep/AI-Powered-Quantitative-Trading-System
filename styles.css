@@ -42,3 +42,7 @@
 @media(max-width:1250px){.india-toolbar{grid-template-columns:repeat(3,minmax(0,1fr))}.india-stock-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.india-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.india-stock-grid{grid-template-columns:1fr;max-height:420px}.india-download-panel{align-items:flex-start;flex-direction:column}.india-download-actions{width:100%}.india-download-actions .button{flex:1}.india-selection-row{align-items:flex-start;flex-direction:column}.india-tag{font-size:8px}}
 @media(max-width:420px){.india-toolbar{grid-template-columns:1fr}.india-download-actions{display:grid;grid-template-columns:1fr}.india-universe .panel-head{gap:8px}.india-universe .panel-head h3{font-size:16px}}
+
+/* Keep the Indian tricolour as a narrow top accent, not a border around the sidebar. */
+.india-market .sidebar{border-top:0;border-image:none}
+.india-market .sidebar::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#ff9933 0 33.333%,#f5f5f5 33.333% 66.666%,#138808 66.666% 100%)}
