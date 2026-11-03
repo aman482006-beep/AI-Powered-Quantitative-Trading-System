@@ -8,7 +8,9 @@ from quantlab.analytics import performance
 
 def sample(n=160):
     idx=pd.bdate_range("2022-01-03",periods=n)
-    close=pd.Series(np.r_[np.linspace(100,130,80),np.linspace(130,105,80)],index=idx)
+    split=max(1,n//2)
+    values=np.r_[np.linspace(100,130,split),np.linspace(130,105,n-split)]
+    close=pd.Series(values,index=idx)
     return pd.DataFrame({"Open":close.shift().fillna(close.iloc[0]),"High":close*1.01,"Low":close*.99,"Close":close,"Volume":1000},index=idx)
 
 def test_indicator_basics():
