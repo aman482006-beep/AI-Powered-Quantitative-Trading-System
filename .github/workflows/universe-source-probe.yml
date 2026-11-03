@@ -11,16 +11,27 @@ jobs:
       - name: Inspect stock universe page
         run: |
           node --input-type=module <<'NODE'
-          const url = "https://stockexact.com/stocks/small-cap";
-          const response = await fetch(url, {headers: {"User-Agent":"Mozilla/5.0","Accept":"text/html"}});
-          console.log("HTTP",response.status,"TYPE",response.headers.get("content-type"));
-          const html=await response.text();
-          console.log("HTML_BYTES",html.length);
-          for(const needle of ["Ather Energy","ATHERENERG","₹70,381 Cr","stocks/small-cap","__NEXT_DATA__","application/ld+json"]) {
-            const i=html.indexOf(needle);
-            console.log("\nNEEDLE",needle,"INDEX",i);
-            if(i>=0) console.log(html.slice(Math.max(0,i-700),Math.min(html.length,i+1400)));
-          }
-          console.log("ANCHOR_TAGS", (html.match(/<a/g)||[]).length);
-          console.log("HAS_STOCKS",html.includes("WELCORP"),html.includes("RBLBANK"),html.includes("Ather Energy"));
+          import fs from "node:fs";
+          const html=await (await fetch("https://stockexact.com/stocks/small-cap",{headers:{"User-Agent":"Mozilla/5.0"}})).text();
+          const rows=html.split('<li><div class="sr-row sr-val">').slice(1).map(x=>x.split("</li>")[0]);
+          const parsed=rows.map((row,index)=>{
+            const href=row.split('class="sr-name" href="/stocks/')[1];
+            const name=href?.split('">')[1]?.split("</a>")[0]?.trim();
+            const symbol=href?.split('"')[0]?.trim();
+            const sub=row.split('class="truncate">')[1]?.split("</span>")[0]||"";
+            const parts=sub.split(" · ");
+            const cap=row.split('<span class="sr-c">₹')[1]?.split("</span>")[0]?.replace(/[^0-9]/g,"");
+            return {rank:index+1,symbol,name,sector:parts.slice(1).join(" · "),marketCapCr:Number(cap)};
+          });
+          const unique=[...new Set(parsed.map(x=>x.symbol).filter(Boolean))];
+          const bad=parsed.filter(x=>!x.symbol||!x.name||!x.sector||!x.marketCapCr);
+          const sourceDate=html.split("By market cap at the close on ")[1]?.split(".")[0];
+          const universe=fs.readFileSync("india-universe.js","utf8");
+          const existing=universe.split("\n").filter(x=>x.trim().startsWith('["')).map(x=>x.trim().split('"')[1]);
+          const overlap=parsed.filter(x=>existing.includes(x.symbol));
+          console.log("ROWS",rows.length,"PARSED",parsed.filter(x=>x.symbol&&x.name&&x.sector&&x.marketCapCr).length,"UNIQUE",unique.length,"BAD",bad.length,"EXISTING100",existing.length,"OVERLAP",overlap.length,"SOURCE_DATE",sourceDate);
+          console.log("FIRST_5",JSON.stringify(parsed.slice(0,5)));
+          console.log("LAST_5",JSON.stringify(parsed.slice(-5)));
+          console.log("BAD_SAMPLE",JSON.stringify(bad.slice(0,10)));
+          console.log("OVERLAP_SAMPLE",JSON.stringify(overlap.slice(0,10)));
           NODE
