@@ -1,4 +1,4 @@
-name: Inspect market cap list client loader
+name: Extract embedded market-cap rows
 on:
   push:
     paths:
@@ -8,22 +8,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect page scripts
+      - name: Inspect embedded full list payload
         run: |
           node --input-type=module <<'NODE'
-          const base="https://stockexact.com";
-          const html=await (await fetch(base+"/stocks/small-cap",{headers:{"User-Agent":"Mozilla/5.0"}})).text();
-          const scripts=[...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(x=>x[1]);
-          console.log("SCRIPTS",JSON.stringify(scripts));
-          for(const path of scripts){
-            try{
-              const txt=await (await fetch(base+path,{headers:{"User-Agent":"Mozilla/5.0"}})).text();
-              const findings=[];
-              for(const term of ["Show all 500","small-cap","/api/","fetch(","api/stock","companies","stocks/"]){
-                let p=-1,n=0;
-                while((p=txt.toLowerCase().indexOf(term.toLowerCase(),p+1))>=0&&n<3){findings.push({term,at:p,snippet:txt.slice(Math.max(0,p-300),Math.min(txt.length,p+600))});n++}
-              }
-              if(findings.length)console.log("\nCHUNK",path,"SIZE",txt.length,"FINDINGS",JSON.stringify(findings));
-            }catch(e){console.log("CHUNK_ERROR",path,e.message)}
+          const html=await (await fetch("https://stockexact.com/stocks/small-cap",{headers:{"User-Agent":"Mozilla/5.0"}})).text();
+          const terms=["ATHERENERG","WELCORP","RBLBANK","JKLAKSHMI","TATAELXSI","AAVAS","Show all 500 companies","marketCap","divYield"];
+          for(const term of terms){
+            const hits=[];let from=0,p;
+            while((p=html.indexOf(term,from))>=0){hits.push(p);from=p+term.length;if(hits.length>=8)break;}
+            console.log("TERM",term,"COUNT_UP_TO_8",hits.length,"POSITIONS",hits);
+            if(hits.length>2)console.log("LAST_CONTEXT",html.slice(Math.max(0,hits.at(-1)-350),Math.min(html.length,hits.at(-1)+550)));
           }
+          const props=[...html.matchAll(/"symbol"s*:s*"([A-Z0-9&.-]+)"/g)].map(x=>x[1]);
+          const caps=[...html.matchAll(/"marketCap"s*:s*(d+(?:.d+)?)/g)].map(x=>Number(x[1]));
+          console.log("JSON_SYMBOLS",props.length,"UNIQUE",new Set(props).size,"FIRST",props.slice(0,10),"LAST",props.slice(-10),"CAPS",caps.length);
+          const rowStarts=[...html.matchAll(/"symbol"s*:s*"([A-Z0-9&.-]+)"/g)].slice(0,5);
+          for(const m of rowStarts)console.log("ROW_CONTEXT",html.slice(m.index-150,m.index+700));
           NODE
