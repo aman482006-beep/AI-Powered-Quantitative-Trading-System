@@ -1,53 +1,32 @@
-name: Export additional 500 market-cap universe
+name: Check midcap and largecap source classes
 on:
   push:
     paths:
       - '.github/workflows/universe-source-probe.yml'
 jobs:
-  export:
+  inspect:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Extract complete 500-row stock payload
+      - name: Inspect market-cap classes
         run: |
           node --input-type=module <<'NODE'
-          const html=await (await fetch("https://stockexact.com/stocks/small-cap",{headers:{"User-Agent":"Mozilla/5.0"}})).text();
-          const flight=[];
-          for(const m of html.matchAll(/self\.__next_f\.push\(\[1,("(?:\\.|[^"\\])*")\]\)/g)){
-            try{flight.push(JSON.parse(m[1]))}catch{}
+          function extractRows(html){
+            const chunks=[];
+            for(const m of html.matchAll(/self\.__next_f\.push\(\[1,("(?:\\.|[^"\\])*")\]\)/g)){try{chunks.push(JSON.parse(m[1]))}catch{}}
+            const data=chunks.join("\n"),mark='"rows":',at=data.indexOf(mark);
+            if(at<0)throw Error("rows missing");
+            const start=at+mark.length;let d=0,q=false,e=false,end=-1;
+            for(let i=start;i<data.length;i++){const c=data[i];if(q){if(e)e=false;else if(c==="\\")e=true;else if(c==='"')q=false;continue}if(c==='"'){q=true;continue}if(c==="[")d++;else if(c==="]"&&--d===0){end=i+1;break}}
+            return JSON.parse(data.slice(start,end));
           }
-          const data=flight.join("\n");
-          const marker='"rows":';
-          const at=data.indexOf(marker);
-          if(at<0)throw Error("Could not locate rows array in server payload");
-          const start=at+marker.length;
-          let depth=0,inString=false,escape=false,end=-1;
-          for(let i=start;i<data.length;i++){
-            const ch=data[i];
-            if(inString){if(escape)escape=false;else if(ch==="\\")escape=true;else if(ch==='"')inString=false;continue}
-            if(ch==='"'){inString=true;continue}
-            if(ch==="[")depth++;
-            else if(ch==="]"){depth--;if(depth===0){end=i+1;break}}
+          for(const cls of ["mid-cap","large-cap"]){
+            const url="https://stockexact.com/stocks/"+cls;
+            const res=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0"}});
+            const html=await res.text(),rows=extractRows(html);
+            console.log("CLASS",cls,"HTTP",res.status,"ROWS",rows.length,"FIRST",JSON.stringify(rows.slice(0,3).map(r=>({symbol:r[1],name:r[2],mcap:r[8]}))),"LAST",JSON.stringify(rows.slice(-3).map(r=>({symbol:r[1],name:r[2],mcap:r[8]}))));
+            const date=html.match(/By market cap at the close on ([^.]+)\./)?.[1];
+            const method=html.match(/average market cap over the six months to ([^<,]+)/)?.[1];
+            console.log("DATE",date,"WINDOW",method);
           }
-          if(end<0)throw Error("Could not close rows array");
-          const raw=JSON.parse(data.slice(start,end));
-          if(raw.length!==500)throw Error("Expected exactly 500 source rows, found "+raw.length);
-          const decode=s=>String(s||"").replace(/&amp;/g,"&").replace(/&#x27;|&#39;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,"<").replace(/&gt;/g,">");
-          const records=raw.map((r,i)=>({
-            rank:i+1,
-            symbol:String(r[1]||"").trim().toUpperCase(),
-            company:decode(r[2]),
-            sector:decode(r[5]),
-            marketCapCr:Number(r[8]),
-            lastClosePriceINR:Number(r[6])||null,
-            source:"StockExact small-cap 500",
-            sourceDate:"2026-11-02"
-          }));
-          const symbols=records.map(x=>x.symbol);
-          if(symbols.some(x=>!x)||new Set(symbols).size!==500)throw Error("500-row source contains blank or duplicate symbols");
-          if(records.some(x=>!x.company||!x.sector||!Number.isFinite(x.marketCapCr)))throw Error("Missing company/sector/market cap in source rows");
-          console.log("JSON_BEGIN");
-          console.log(JSON.stringify(records));
-          console.log("JSON_END");
-          console.log("VALIDATION",JSON.stringify({records:records.length,unique:new Set(symbols).size,first:records[0],last:records.at(-1)}));
           NODE
