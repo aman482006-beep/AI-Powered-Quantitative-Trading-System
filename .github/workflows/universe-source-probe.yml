@@ -1,33 +1,38 @@
-name: Export adjacent market-cap classes
+name: Smoke test additional India historical prices
 on:
   push:
     paths:
       - '.github/workflows/universe-source-probe.yml'
 jobs:
-  export:
+  history-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Extract large and mid-cap source rows
+      - name: Test max-available OHLCV for 10 additions
         run: |
           node --input-type=module <<'NODE'
-          async function extract(cls){
-            const html=await (await fetch("https://stockexact.com/stocks/"+cls,{headers:{"User-Agent":"Mozilla/5.0"}})).text();
-            const flight=[];
-            for(const m of html.matchAll(/self\.__next_f\.push\(\[1,("(?:\\.|[^"\\])*")\]\)/g)){try{flight.push(JSON.parse(m[1]))}catch{}}
-            const data=flight.join("\n"),mark='"rows":',at=data.indexOf(mark);
-            if(at<0)throw Error("rows missing for "+cls);
-            const start=at+mark.length;let depth=0,inString=false,escape=false,end=-1;
-            for(let i=start;i<data.length;i++){const c=data[i];if(inString){if(escape)escape=false;else if(c==="\\")escape=true;else if(c==='"')inString=false;continue}if(c==='"'){inString=true;continue}if(c==="[")depth++;else if(c==="]"&&--depth===0){end=i+1;break}}
-            const raw=JSON.parse(data.slice(start,end));
-            const date=html.match(/By market cap at the close on ([^.]+)\./)?.[1]||"unknown";
-            const window=html.match(/average market cap over the six months to ([^,<]+)/)?.[1]||"unknown";
-            const decode=s=>String(s||"").replace(/&amp;/g,"&").replace(/&#x27;|&#39;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,"<").replace(/&gt;/g,">");
-            return {className:cls,marketCapDate:date,classificationWindow:window,rows:raw.map((r,i)=>({sourceClass:cls,sourceClassRow:i+1,symbol:String(r[1]||"").trim().toUpperCase(),company:decode(r[2]),sector:decode(r[5]),marketCapCr:Number(r[8]),lastClosePriceINR:Number(r[6])||null}))};
+          const symbols=["LICI","ICICIAMC","BHEL","LAURUSLABS","GROWW","ATHERENERG","WELCORP","RBLBANK","HCG","JLHL"];
+          const end=Math.floor(Date.now()/1000)+86400;
+          async function test(symbol){
+            let lastError=null;
+            for(const host of ["query1.finance.yahoo.com","query2.finance.yahoo.com"]){
+              try{
+                const target="https://"+host+"/v8/finance/chart/"+symbol+".NS?period1=0&period2="+end+"&interval=1d&events=div%2Csplits";
+                const res=await fetch("https://proxy.cors.dev/"+target,{headers:{Accept:"application/json"},credentials:"omit"});
+                if(!res.ok)throw Error("HTTP "+res.status);
+                const json=await res.json(),result=json?.chart?.result?.[0];
+                if(!result)throw Error(json?.chart?.error?.description||"No Yahoo result");
+                const q=result.indicators.quote[0],timestamps=result.timestamp||[];
+                const valid=timestamps.map((t,i)=>({t,o:q.open?.[i],h:q.high?.[i],l:q.low?.[i],c:q.close?.[i]})).filter(x=>[x.o,x.h,x.l,x.c].every(Number.isFinite));
+                if(valid.length<2)throw Error("Only "+valid.length+" valid bars");
+                return {symbol,status:"OK",bars:valid.length,first:new Date(valid[0].t*1000).toISOString().slice(0,10),last:new Date(valid.at(-1).t*1000).toISOString().slice(0,10)};
+              }catch(e){lastError=e}
+            }
+            return {symbol,status:"FAILED",error:lastError?.message||"unknown"};
           }
-          const payload={mid:await extract("mid-cap"),large:await extract("large-cap")};
-          console.log("JSON_BEGIN");
-          console.log(JSON.stringify(payload));
-          console.log("JSON_END");
-          console.log("COUNTS",JSON.stringify({mid:payload.mid.rows.length,large:payload.large.rows.length,dates:[payload.mid.marketCapDate,payload.large.marketCapDate],windows:[payload.mid.classificationWindow,payload.large.classificationWindow]}));
+          const out=[];
+          for(let i=0;i<symbols.length;i+=3){out.push(...await Promise.all(symbols.slice(i,i+3).map(test)))}
+          console.log("HISTORY_TEST",JSON.stringify(out));
+          console.log("SUMMARY",JSON.stringify({tested:out.length,passed:out.filter(x=>x.status==="OK").length,failed:out.filter(x=>x.status!=="OK").length}));
+          if(out.some(x=>x.status!=="OK"))process.exit(1);
           NODE
