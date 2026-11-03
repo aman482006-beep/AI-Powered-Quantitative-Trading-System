@@ -201,8 +201,8 @@
     providerRows[1].querySelector("span:last-child").textContent = "100 INDIAN COMPANIES";
   }
 
-  // Restrict the single-stock backtest picker to the same Indian Nifty 100 universe.
-  $("loadData").addEventListener("click", function (event) {
+  // Restrict both the fetch button and the backtest shortcut to Indian Nifty 100 symbols.
+  function enforceIndianTicker(event) {
     const input = $("ticker");
     const typed = input.value.trim().toUpperCase().replace(/\.NS$/, "");
     const match = stocks.find(function (s) { return s.symbol === typed; });
@@ -213,7 +213,9 @@
       return;
     }
     if (match) input.value = match.yahoo;
-  }, true);
+  }
+  $("loadData").addEventListener("click", enforceIndianTicker, true);
+  $("runBacktest").addEventListener("click", enforceIndianTicker, true);
 
   function localRowsFor(symbol) {
     return stocks.filter(function (s) { return s.symbol === symbol; });
