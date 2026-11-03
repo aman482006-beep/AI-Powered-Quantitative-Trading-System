@@ -20,7 +20,7 @@ QuantLab is a historical quantitative research and simulation platform. It provi
 3. Select branch `main`, folder `/ (root)`, and save.
 4. Wait for the Pages deployment check to finish. Open the published URL shown on the Pages settings screen.
 
-The app opens with a synthetic demo series. The market-data workspace is India-only and includes the 100 Nifty 100 constituents (universe snapshot: 30 October 2026). Search or filter by sector, select companies, choose a date range, and use **Download all 100** or **Download selected** to fetch historical OHLCV bars into one Excel-friendly CSV. Choose exactly one company and use **Use one stock in backtest** to send it to the strategy terminal. The Nifty 100 list is a dated constituent snapshot and should be refreshed after index rebalances.
+The app opens with a synthetic demo series. The Indian equity universe contains the original 100 Nifty 100 names plus 500 additional unique Indian listed companies ranked by latest market capitalisation (snapshot: 2 November 2026). The additional 500 are selected from the source large-cap, mid-cap and top-500 small-cap tables, with the original 100 excluded and the remaining candidates ranked by current market cap. Search/filter by company, ticker, sector or universe group. The history downloader defaults to 1970-01-01 through the latest selected end date; each company returns its earliest available Yahoo Finance bar through that date, which may differ by listing date and provider coverage. Use **Download all 500 additions** to request full available historical OHLCV and export one Excel-friendly CSV. This is on-demand historical download, not a preloaded price database or an official NSE feed.
 
 ## Free historical data sources
 
