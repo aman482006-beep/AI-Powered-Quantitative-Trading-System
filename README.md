@@ -20,12 +20,12 @@ QuantLab is a historical quantitative research and simulation platform. It provi
 3. Select branch `main`, folder `/ (root)`, and save.
 4. Wait for the Pages deployment check to finish. Open the published URL shown on the Pages settings screen.
 
-The app opens with a synthetic demo series. Choose a symbol and press **Fetch market data**, or upload a CSV.
+The app opens with a synthetic demo series. The market-data workspace is India-only and includes the 100 Nifty 100 constituents (universe snapshot: 30 October 2026). Search or filter by sector, select companies, choose a date range, and use **Download all 100** or **Download selected** to fetch historical OHLCV bars into one Excel-friendly CSV. Choose exactly one company and use **Use one stock in backtest** to send it to the strategy terminal. The Nifty 100 list is a dated constituent snapshot and should be refreshed after index rebalances.
 
 ## Free historical data sources
 
-- **Yahoo Finance chart endpoint**: free, historical, no key for many symbols, but unofficial, subject to throttling and access/CORS restrictions. Common Indian symbols include `RELIANCE.NS`, `HDFCBANK.NS`, `INFY.NS`, and `TCS.NS`. Availability is not guaranteed.
-- **Stooq**: free historical CSV for supported markets/symbols. Coverage and symbol conventions differ; the browser fallback currently uses daily bars.
+- **Yahoo Finance chart endpoint via `proxy.cors.dev`**: free historical bars for many Indian `.NS` symbols without an API key. The browser relay is a third-party dependency and can be rate-limited or unavailable. The feed is unofficial and not an NSE-authorised data feed.
+- **Nifty 100 universe**: 100 large-cap Indian companies across financials, IT, energy, healthcare, autos, consumer, industrials and other NSE sectors. The roster is a saved snapshot, not a live constituent synchronisation.
 - **CSV upload**: deterministic fallback for any market when you have a correctly formatted OHLCV file.
 
 When a browser blocks provider requests, that is a provider/network/CORS restriction rather than evidence that a symbol does not exist. Use CSV upload or the Python data path.
@@ -87,6 +87,6 @@ pytest -q
 
 ## Known limitations
 
-Provider access from a browser can be blocked by CORS, throttling, network policy or ticker coverage. Use CSV or the Python backend if fetch fails. Adjusted close and corporate actions vary by provider; this is not tick-level or intraday execution. The simple simulation does not model market impact, liquidity constraints, taxes, dividends as cash flows, borrow fees, margin, delistings or survivorship bias. The basic train/test split is not a complete walk-forward optimiser.
+Provider access from a browser can be blocked by relay availability, throttling, network policy or ticker coverage. The bulk downloader reports symbols that fail and downloads the successful rows; it does not fabricate missing prices. Use CSV upload or the Python backend if fetch fails. Adjusted close and corporate actions vary by provider; this is not tick-level or intraday execution. The simple simulation does not model market impact, liquidity constraints, taxes, dividends as cash flows, borrow fees, margin, delistings or survivorship bias. The basic train/test split is not a complete walk-forward optimiser.
 
 Past performance does not guarantee future results.
