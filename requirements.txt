@@ -1,0 +1,10 @@
+# Python backend dependencies (GitHub Pages runs the browser app instead).
+pandas>=2.1
+numpy>=1.26
+yfinance>=0.2.40
+streamlit>=1.36
+plotly>=5.22
+pandas-ta>=0.3.14b
+python-dotenv>=1.0
+google-generativeai>=0.7
+pytest>=8.0
