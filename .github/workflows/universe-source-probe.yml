@@ -1,26 +1,29 @@
-name: Locate full market-cap list endpoint
+name: Inspect market cap list client loader
 on:
   push:
     paths:
       - '.github/workflows/universe-source-probe.yml'
 jobs:
-  probe:
+  inspect:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect list controls
+      - name: Inspect page scripts
         run: |
           node --input-type=module <<'NODE'
-          const html=await (await fetch("https://stockexact.com/stocks/small-cap",{headers:{"User-Agent":"Mozilla/5.0"}})).text();
-          for (const term of ["View all","view all","See all","see all","Load more","load more","500 largest","500 stocks","Next","next","Page 1","page 1","Show all","show all"]) {
-            const i=html.toLowerCase().indexOf(term.toLowerCase());
-            if(i>=0)console.log("\nTERM",term,"AT",i,"\n",html.slice(Math.max(0,i-900),Math.min(html.length,i+1700)));
-          }
-          const links=[...html.matchAll(/href="([^"]+)"/g)].map(x=>x[1]);
-          console.log("\nMAIN_LINKS",links.filter(x=>/stock|small|cap|more|all|list|page|rank/i.test(x)).slice(-120));
-          const ul=html.indexOf('<ul aria-label="Small cap stocks"');
-          const ulEnd=html.indexOf("</ul>",ul);
-          console.log("\nTABLE_END",html.slice(ulEnd,ulEnd+6500));
+          const base="https://stockexact.com";
+          const html=await (await fetch(base+"/stocks/small-cap",{headers:{"User-Agent":"Mozilla/5.0"}})).text();
           const scripts=[...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(x=>x[1]);
-          console.log("\nSCRIPTS",scripts);
+          console.log("SCRIPTS",JSON.stringify(scripts));
+          for(const path of scripts){
+            try{
+              const txt=await (await fetch(base+path,{headers:{"User-Agent":"Mozilla/5.0"}})).text();
+              const findings=[];
+              for(const term of ["Show all 500","small-cap","/api/","fetch(","api/stock","companies","stocks/"]){
+                let p=-1,n=0;
+                while((p=txt.toLowerCase().indexOf(term.toLowerCase(),p+1))>=0&&n<3){findings.push({term,at:p,snippet:txt.slice(Math.max(0,p-300),Math.min(txt.length,p+600))});n++}
+              }
+              if(findings.length)console.log("\nCHUNK",path,"SIZE",txt.length,"FINDINGS",JSON.stringify(findings));
+            }catch(e){console.log("CHUNK_ERROR",path,e.message)}
+          }
           NODE
