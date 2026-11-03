@@ -46,3 +46,54 @@
 /* Keep the Indian tricolour as a narrow top accent, not a border around the sidebar. */
 .india-market .sidebar{border-top:0;border-image:none}
 .india-market .sidebar::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#ff9933 0 33.333%,#f5f5f5 33.333% 66.666%,#138808 66.666% 100%)}
+
+/* Searchable NSE company picker */
+.ticker-wrap{position:relative}
+.ticker-wrap input[role=combobox]{padding-right:36px}
+.ticker-wrap:after{content:"⌄";position:absolute;right:13px;top:15px;color:#8ea0b5;pointer-events:none;font-size:15px}
+.ticker-autocomplete{position:absolute;z-index:30;top:calc(100% + 5px);left:0;right:0;max-height:340px;overflow:auto;background:#0c1520;border:1px solid #42536a;border-radius:8px;box-shadow:0 18px 42px #0009;padding:5px}
+.ticker-autocomplete[hidden]{display:none}
+.ticker-option{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;border:0;border-radius:5px;padding:10px;background:transparent;color:var(--text);cursor:pointer}
+.ticker-option:hover,.ticker-option.active{background:#1b2a39}
+.ticker-option-name{font:600 11px var(--font);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ticker-option-meta{display:flex;align-items:flex-end;flex-direction:column;gap:3px;flex:0 0 auto}
+.ticker-option-meta b{font:10px var(--mono);color:var(--green)}
+.ticker-option-meta small{font:8px var(--mono);color:#8494a8}
+.ticker-no-match{padding:15px;color:#ffb1a7;font-size:10px;line-height:1.6}
+.ticker-selection-hint{font:9px var(--mono);color:#718197;margin-top:6px;letter-spacing:0}
+.ticker-selection-hint.selected{color:var(--green)}
+/* Backtest progress: actual simulation bars are processed before the final report is revealed. */
+.backtest-monitor{background:linear-gradient(135deg,#111d2a,#0c141e);border:1px solid #34465a;border-radius:10px;padding:19px;margin:16px 0 17px;overflow:hidden}
+.backtest-monitor[hidden]{display:none}
+.run-monitor-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.run-monitor-head h3{font-size:15px;margin:5px 0}
+.run-monitor-head p{font-size:10px;color:var(--muted);margin:6px 0 0;line-height:1.6}
+.run-state{font:9px var(--mono);letter-spacing:1px;border:1px solid #3a4a5c;color:#aab8c9;padding:7px 9px;border-radius:4px;white-space:nowrap}
+.run-state.running{border-color:#597b40;color:var(--green)}
+.run-state.complete{border-color:#348b5a;color:#8df0ad}
+.run-state.failed{border-color:#8b4148;color:#ff9299}
+.run-progress-track{height:6px;background:#202e3e;border-radius:20px;overflow:hidden;margin:16px 0}
+.run-progress-track span{height:100%;width:0;display:block;background:linear-gradient(90deg,#ff9933,#b1f36c,#138808);transition:width .22s ease}
+.run-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.run-stats>div{background:#0a121c;border:1px solid #243446;border-radius:6px;padding:11px}
+.run-stats small{display:block;font:8px var(--mono);letter-spacing:.7px;color:#8292a6}
+.run-stats b{display:block;font:15px var(--mono);color:#dfe8f1;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.run-graph-head{display:flex;justify-content:space-between;gap:10px;margin:17px 0 5px;color:#8797aa;font:8px var(--mono);letter-spacing:.8px}
+.run-graph{width:100%;height:112px;background:#09111a;border:1px solid #1f2d3d;border-radius:6px}
+.run-graph-axis{stroke:#344456;stroke-width:1;stroke-dasharray:3 5}
+.run-equity-line{fill:none;stroke:#b1f36c;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 4px #b1f36c66)}
+.run-steps{display:flex;gap:8px 16px;flex-wrap:wrap;margin-top:12px}
+.run-steps span{font:8px var(--mono);color:#68798e}
+.run-steps span.active{color:#ffd28f}
+.run-steps span.done{color:var(--green)}
+.run-steps span.failed{color:#ff9299}
+#runBacktest:disabled{opacity:.55;cursor:wait}
+.metrics-grid.result-ready .metric{animation:quantMetricReveal .42s both}
+.metrics-grid.result-ready .metric:nth-child(2){animation-delay:.04s}
+.metrics-grid.result-ready .metric:nth-child(3){animation-delay:.08s}
+.metrics-grid.result-ready .metric:nth-child(4){animation-delay:.12s}
+.metrics-grid.result-ready .metric:nth-child(5){animation-delay:.16s}
+.metrics-grid.result-ready .metric:nth-child(6){animation-delay:.2s}
+@keyframes quantMetricReveal{from{opacity:.25;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:760px){.run-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.run-monitor-head{align-items:flex-start}.run-graph-head{font-size:7px}}
+@media(max-width:420px){.run-stats b{font-size:13px}.run-steps{display:grid;grid-template-columns:1fr 1fr}.ticker-option{align-items:flex-start;flex-direction:column;gap:5px}.ticker-option-meta{align-items:flex-start}}
