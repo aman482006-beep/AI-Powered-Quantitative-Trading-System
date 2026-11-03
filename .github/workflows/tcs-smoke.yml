@@ -1,0 +1,35 @@
+name: Temporary TCS history smoke test
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  tcs-history:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Yahoo chart through browser relay
+        run: |
+          node --input-type=module <<'NODE'
+          const target = "https://query1.finance.yahoo.com/v8/finance/chart/TCS.NS?range=1mo&interval=1d";
+          const response = await fetch("https://proxy.cors.dev/" + target, {
+            method: "GET",
+            headers: { Accept: "application/json" },
+            credentials: "omit"
+          });
+          console.log("HTTP:", response.status);
+          console.log("CORS relay error:", response.headers.get("X-Cors-Error") || "none");
+          const payload = await response.json();
+          const result = payload?.chart?.result?.[0];
+          const timestamps = result?.timestamp || [];
+          const quote = result?.indicators?.quote?.[0] || {};
+          const rows = timestamps.filter((_, i) => [quote.open?.[i], quote.high?.[i], quote.low?.[i], quote.close?.[i]].every(Number.isFinite));
+          console.log("Symbol:", result?.meta?.symbol || "not returned");
+          console.log("Bars:", rows.length);
+          console.log("First timestamp:", rows.length ? new Date(timestamps[0] * 1000).toISOString().slice(0, 10) : "none");
+          console.log("Last timestamp:", rows.length ? new Date(timestamps[timestamps.length - 1] * 1000).toISOString().slice(0, 10) : "none");
+          if (!response.ok || rows.length < 5) {
+            console.log("Payload error:", JSON.stringify(payload).slice(0, 1200));
+            process.exit(1);
+          }
+          NODE
