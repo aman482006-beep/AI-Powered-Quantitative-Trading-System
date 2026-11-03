@@ -85,7 +85,7 @@ async function drawLiveProgressCharts(p){
  const series=p.series,eq=series.map(x=>x.equity);
  const candles={x:dates,open:visible.map(x=>x.open),high:visible.map(x=>x.high),low:visible.map(x=>x.low),close:visible.map(x=>x.close),type:"candlestick",name:lastSymbol,increasing:{line:{color:"#b1f36c"}},decreasing:{line:{color:"#ff747e"}}};
  $("chartTicker").textContent=lastSymbol+" · "+p.processed.toLocaleString()+"/"+p.total.toLocaleString()+" BARS";
- const buyHold=visible.map(x=>series[visible.indexOf(x)]?series[0].equity*x.close/visible[0].close:0);
+ const initialCapital=Number($("capital").value)||100000;const buyHold=visible.map(x=>initialCapital*x.close/visible[0].close);
  const equityTraces=[
   {x:dates,y:eq,type:"scatter",mode:"lines",name:"Strategy",line:{color:"#b1f36c",width:2}},
   {x:dates,y:buyHold,type:"scatter",mode:"lines",name:"Buy & hold",line:{color:"#7188a7",width:1,dash:"dot"}}
