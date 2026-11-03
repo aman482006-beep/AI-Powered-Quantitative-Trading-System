@@ -1,4 +1,4 @@
-name: Probe market-cap universe source
+name: Probe market-cap universe pagination
 on:
   push:
     paths:
@@ -8,30 +8,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect stock universe page
+      - name: Inspect market-cap pagination
         run: |
           node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          const html=await (await fetch("https://stockexact.com/stocks/small-cap",{headers:{"User-Agent":"Mozilla/5.0"}})).text();
-          const rows=html.split('<li><div class="sr-row sr-val">').slice(1).map(x=>x.split("</li>")[0]);
-          const parsed=rows.map((row,index)=>{
-            const href=row.split('class="sr-name" href="/stocks/')[1];
-            const name=href?.split('">')[1]?.split("</a>")[0]?.trim();
-            const symbol=href?.split('"')[0]?.trim();
-            const sub=row.split('class="truncate">')[1]?.split("</span>")[0]||"";
-            const parts=sub.split(" · ");
-            const cap=row.split('<span class="sr-c">₹')[1]?.split("</span>")[0]?.replace(/[^0-9]/g,"");
-            return {rank:index+1,symbol,name,sector:parts.slice(1).join(" · "),marketCapCr:Number(cap)};
-          });
-          const unique=[...new Set(parsed.map(x=>x.symbol).filter(Boolean))];
-          const bad=parsed.filter(x=>!x.symbol||!x.name||!x.sector||!x.marketCapCr);
-          const sourceDate=html.split("By market cap at the close on ")[1]?.split(".")[0];
-          const universe=fs.readFileSync("india-universe.js","utf8");
-          const existing=universe.split("\n").filter(x=>x.trim().startsWith('["')).map(x=>x.trim().split('"')[1]);
-          const overlap=parsed.filter(x=>existing.includes(x.symbol));
-          console.log("ROWS",rows.length,"PARSED",parsed.filter(x=>x.symbol&&x.name&&x.sector&&x.marketCapCr).length,"UNIQUE",unique.length,"BAD",bad.length,"EXISTING100",existing.length,"OVERLAP",overlap.length,"SOURCE_DATE",sourceDate);
-          console.log("FIRST_5",JSON.stringify(parsed.slice(0,5)));
-          console.log("LAST_5",JSON.stringify(parsed.slice(-5)));
-          console.log("BAD_SAMPLE",JSON.stringify(bad.slice(0,10)));
-          console.log("OVERLAP_SAMPLE",JSON.stringify(overlap.slice(0,10)));
+          for (const page of [1,2,3,10]) {
+            const url="https://stockexact.com/stocks/small-cap"+(page===1?"":"?page="+page);
+            const res=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0"}});
+            const html=await res.text();
+            const rows=html.split('<li><div class="sr-row sr-val">').slice(1).map(x=>x.split("</li>")[0]);
+            const syms=rows.map(row=>row.split('class="sr-name" href="/stocks/')[1]?.split('"')[0]);
+            const first=rows[0]?.split('class="sr-name" href="/stocks/')[1]?.split('">')[1]?.split("</a>")[0];
+            const last=rows.at(-1)?.split('class="sr-name" href="/stocks/')[1]?.split('">')[1]?.split("</a>")[0];
+            console.log("PAGE",page,"HTTP",res.status,"ROWS",rows.length,"UNIQUE",new Set(syms.filter(Boolean)).size,"FIRST",first,"LAST",last);
+            if(page===1) {
+              console.log("PAGINATION_LINKS",html.match(/href="[^"]*(?:page|cursor|offset)[^"]*"/gi)?.slice(-30));
+              const nav=html.indexOf("Pagination");
+              console.log("PAGINATION_TEXT",nav>=0?html.slice(nav-1000,nav+2500):html.slice(-5000));
+            }
+          }
           NODE
