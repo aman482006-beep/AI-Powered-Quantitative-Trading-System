@@ -1,5 +1,5 @@
 /* India-only large-cap universe and browser bulk-history downloader for QuantLab. */
-(function () {
+(async function () {
   "use strict";
   const rows = [
     ["ABB","ABB India Ltd.","Capital Goods"],
@@ -103,21 +103,55 @@
     ["WIPRO","Wipro Ltd.","Information Technology"],
     ["ZYDUSLIFE","Zydus Lifesciences Ltd.","Healthcare"]
   ];
+  let additionalPayload = null;
+  let additionalLoadError = null;
+  try {
+    const response = await fetch("./data/india-additional-500-marketcap.json", { cache: "no-store" });
+    if (!response.ok) throw new Error("market-cap universe HTTP " + response.status);
+    additionalPayload = await response.json();
+    if (!additionalPayload || !Array.isArray(additionalPayload.rows) || additionalPayload.rows.length !== 500) {
+      throw new Error("Expected exactly 500 additional market-cap rows.");
+    }
+    const originalSymbols = new Set(rows.map(function (r) { return r[0]; }));
+    const seen = new Set();
+    const extraRows = additionalPayload.rows.map(function (item) {
+      const symbol = String(item.symbol || "").trim().toUpperCase();
+      if (!symbol || originalSymbols.has(symbol) || seen.has(symbol)) throw new Error("Duplicate or blank symbol in additional universe: " + symbol);
+      if (!Number.isFinite(Number(item.marketCapCr))) throw new Error("Missing market cap for " + symbol);
+      seen.add(symbol);
+      return [symbol, item.company, item.sector, Number(item.marketCapCr), Number(item.rank), item.classification || "Additional"];
+    });
+    if (extraRows.length !== 500 || seen.size !== 500) throw new Error("Additional universe validation failed.");
+    rows.push.apply(rows, extraRows);
+  } catch (error) {
+    additionalLoadError = error;
+    console.error("Could not load the additional 500-company universe:", error);
+  }
   const stocks = rows.map(function (r) {
-    return { symbol: r[0], yahoo: r[0] + ".NS", company: r[1], sector: r[2] };
+    return {
+      symbol: r[0], yahoo: r[0] + ".NS", company: r[1], sector: r[2],
+      marketCapCr: r[3] == null ? null : Number(r[3]),
+      marketCapRank: r[4] == null ? null : Number(r[4]),
+      classification: r[5] || "Original Nifty 100",
+      universeGroup: r[4] == null ? "nifty100" : "additional500"
+    };
   });
+  const originalStocks = stocks.filter(function (s) { return s.universeGroup === "nifty100"; });
+  const additionalStocks = stocks.filter(function (s) { return s.universeGroup === "additional500"; });
   const $ = function (id) { return document.getElementById(id); };
   const panel = document.createElement("section");
   panel.id = "indiaUniversePanel";
   panel.className = "panel india-universe";
   panel.innerHTML =
-    '<div class="panel-head"><div><span class="eyebrow">INDIA EQUITY UNIVERSE / NIFTY 100</span><h3>100 large-cap Indian companies</h3><p class="india-subcopy">NSE-listed equities only · Yahoo Finance symbols · historical OHLCV in INR</p></div><span class="india-tag">100 NSE STOCKS</span></div>' +
-    '<div class="india-toolbar"><div class="india-filter"><label for="indiaSearch">SEARCH COMPANY OR SYMBOL</label><input id="indiaSearch" type="search" placeholder="Search Reliance, INFY, banking…"></div><div class="india-filter"><label for="indiaSector">SECTOR</label><select id="indiaSector"><option value="">All sectors</option></select></div><div class="india-filter india-date"><label for="bulkStart">FROM</label><input id="bulkStart" type="date" value="2020-01-01"></div><div class="india-filter india-date"><label for="bulkEnd">TO</label><input id="bulkEnd" type="date"></div><div class="india-filter"><label for="bulkInterval">FREQUENCY</label><select id="bulkInterval"><option value="1d">Daily</option><option value="1wk">Weekly</option><option value="1mo">Monthly</option></select></div></div>' +
-    '<div class="india-selection-row"><div><b id="indiaSelectedCount">100 selected</b><span id="indiaVisibleCount"> · showing 100</span></div><div class="india-selection-actions"><button class="button small ghost" id="indiaSelectVisible">Select visible</button><button class="button small ghost" id="indiaClearSelection">Clear selection</button></div></div>' +
+    '<div class="panel-head"><div><span class="eyebrow">INDIA EQUITY UNIVERSE / 100 + 500</span><h3>' + stocks.length + ' Indian listed companies</h3><p class="india-subcopy">Original Nifty 100 + 500 additional companies ranked by market capitalisation · INR</p></div><span class="india-tag">' + stocks.length + ' INDIA STOCKS</span></div>' +
+    '<div class="india-snapshot-strip"><span><b>500 additions</b> · sorted by latest market cap</span><span>Snapshot: 2 Nov 2026</span><span>Original 100 excluded</span></div>' +
+    '<div class="india-toolbar"><div class="india-filter"><label for="indiaSearch">SEARCH COMPANY OR SYMBOL</label><input id="indiaSearch" type="search" placeholder="Search LICI, Tata, banking…"></div><div class="india-filter"><label for="indiaSector">SECTOR</label><select id="indiaSector"><option value="">All sectors</option></select></div><div class="india-filter"><label for="indiaGroup">UNIVERSE</label><select id="indiaGroup"><option value="">All ' + stocks.length + '</option><option value="nifty100">Original Nifty 100</option><option value="additional500">Additional 500 by market cap</option></select></div><div class="india-filter india-date"><label for="bulkStart">HISTORY FROM</label><input id="bulkStart" type="date" value="1970-01-01"></div><div class="india-filter india-date"><label for="bulkEnd">THROUGH</label><input id="bulkEnd" type="date"></div><div class="india-filter"><label for="bulkInterval">FREQUENCY</label><select id="bulkInterval"><option value="1d">Daily</option><option value="1wk">Weekly</option><option value="1mo">Monthly</option></select></div></div>' +
+    '<div class="india-selection-row"><div><b id="indiaSelectedCount">100 selected</b><span id="indiaVisibleCount"> · showing ' + stocks.length + ' of ' + stocks.length + '</span></div><div class="india-selection-actions"><button class="button small ghost" id="indiaSelectVisible">Select visible</button><button class="button small ghost" id="indiaClearSelection">Clear selection</button></div></div>' +
     '<div class="india-stock-grid" id="indiaStockList"></div>' +
-    '<div class="india-download-panel"><div class="india-download-copy"><b>Bulk historical data download</b><span>Fetches each selected company’s historical candles and combines them into one Excel-friendly CSV file.</span></div><div class="india-download-actions"><button class="button primary" id="indiaDownloadSelected">↓ Download selected</button><button class="button ghost" id="indiaDownloadAll">↓ Download all 100</button><button class="button ghost" id="indiaUseOne">Use one stock in backtest</button></div></div>' +
-    '<div class="india-progress"><div class="india-progress-track"><span id="indiaProgressFill"></span></div><div id="indiaProgressText">Ready · no market data has been downloaded yet.</div></div><div class="india-failures" id="indiaFailures"></div>' +
-    '<div class="india-source-note">Universe snapshot: Nifty 100 constituents as at 30 Oct 2026. Historical prices are requested on demand from Yahoo Finance through a public CORS relay; availability, ticker coverage and rate limits are controlled by the provider. This is not an official NSE data feed or a live feed. <a href="https://www.nseindia.com/static/products-services/indices-nifty100-index" target="_blank" rel="noreferrer">NSE index information ↗</a></div>';
+    '<div class="india-download-panel"><div class="india-download-copy"><b>Full available historical OHLCV</b><span>From the earliest bar Yahoo Finance returns for each company through the selected end date. Each stock can have a different first trading date.</span></div><div class="india-download-actions"><button class="button primary" id="indiaDownloadSelected">↓ Download selected</button><button class="button ghost" id="indiaDownloadAll">↓ Download all 500 additions</button><button class="button ghost" id="indiaDownloadOriginal">↓ Download original 100</button><button class="button ghost" id="indiaUseOne">Use one stock in backtest</button></div></div>' +
+    '<div class="india-progress"><div class="india-progress-track"><span id="indiaProgressFill"></span></div><div id="indiaProgressText">Ready · no history downloaded yet. Select a universe and start a download.</div></div><div class="india-failures" id="indiaFailures"></div>' +
+    '<div class="india-source-note">Company and current market-cap snapshot: 2 Nov 2026. Candidate companies were taken from the source large-, mid- and small-cap tables, the original 100 were excluded, and the remaining companies were ranked by current market capitalisation. Classification uses six-month average market capitalisation through June 2026. Historical OHLCV is requested on demand from Yahoo Finance; the app does not invent unavailable history. Yahoo is an unofficial data source, not an NSE-authorised feed. <a href="https://stockexact.com/stocks" target="_blank" rel="noreferrer">Market-cap source ↗</a></div>' +
+    (additionalLoadError ? '<div class="india-failures">Additional 500-company file could not be loaded: ' + escapeHTML(additionalLoadError.message) + '</div>' : '');
   const dataSummaryPanel = $("dataSummary") && $("dataSummary").closest(".panel");
   if (dataSummaryPanel) dataSummaryPanel.parentNode.insertBefore(panel, dataSummaryPanel);
   else $("page-data").appendChild(panel);
@@ -129,7 +163,7 @@
     const opt = document.createElement("option");
     opt.value = sector; opt.textContent = sector; $("indiaSector").appendChild(opt);
   });
-  const selected = new Set(stocks.map(function (s) { return s.symbol; }));
+  const selected = new Set(originalStocks.map(function (s) { return s.symbol; }));
   function escapeHTML(value) {
     return String(value).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -138,19 +172,25 @@
   function filteredStocks() {
     const q = $("indiaSearch").value.trim().toLowerCase();
     const sector = $("indiaSector").value;
+    const group = $("indiaGroup").value;
     return stocks.filter(function (s) {
       return (!sector || s.sector === sector) &&
-        (!q || (s.symbol + " " + s.company + " " + s.sector).toLowerCase().indexOf(q) >= 0);
+        (!group || s.universeGroup === group) &&
+        (!q || (s.symbol + " " + s.company + " " + s.sector + " " + s.classification).toLowerCase().indexOf(q) >= 0);
     });
   }
   function updateSelectedCount() {
     $("indiaSelectedCount").textContent = selected.size + " selected";
-    $("indiaVisibleCount").textContent = " · showing " + filteredStocks().length + " of 100";
+    $("indiaVisibleCount").textContent = " · showing " + filteredStocks().length + " of " + stocks.length;
   }
   function renderList() {
     const visible = filteredStocks();
     $("indiaStockList").innerHTML = visible.map(function (s) {
-      return '<label class="india-stock"><input type="checkbox" class="india-stock-check" value="' + escapeHTML(s.symbol) + '"' + (selected.has(s.symbol) ? " checked" : "") + '><span class="india-stock-main"><b>' + escapeHTML(s.company) + '</b><small>' + escapeHTML(s.symbol) + '.NS</small></span><span class="india-stock-sector">' + escapeHTML(s.sector) + '</span></label>';
+      const meta = s.universeGroup === "additional500"
+        ? s.symbol + ".NS · #" + s.marketCapRank + " · ₹" + Number(s.marketCapCr).toLocaleString("en-IN") + " Cr"
+        : s.symbol + ".NS · Original 100";
+      const rankTag = s.universeGroup === "additional500" ? '<small class="india-cap-rank">ADDITION #' + s.marketCapRank + '</small>' : "";
+      return '<label class="india-stock"><input type="checkbox" class="india-stock-check" value="' + escapeHTML(s.symbol) + '"' + (selected.has(s.symbol) ? " checked" : "") + '><span class="india-stock-main"><b>' + escapeHTML(s.company) + '</b><small>' + escapeHTML(meta) + '</small>' + rankTag + '</span><span class="india-stock-sector">' + escapeHTML(s.sector) + '</span></label>';
     }).join("") || '<div class="india-empty">No companies match this search.</div>';
     $("indiaStockList").querySelectorAll(".india-stock-check").forEach(function (box) {
       box.addEventListener("change", function () {
@@ -162,6 +202,7 @@
   }
   $("indiaSearch").addEventListener("input", renderList);
   $("indiaSector").addEventListener("change", renderList);
+  $("indiaGroup").addEventListener("change", renderList);
   $("indiaSelectVisible").addEventListener("click", function () {
     filteredStocks().forEach(function (s) { selected.add(s.symbol); });
     renderList();
@@ -311,34 +352,40 @@
   async function fetchStockHistory(stock, start, end, interval) {
     const p1 = Math.floor(new Date(start + "T00:00:00Z").getTime() / 1000);
     const p2 = Math.floor(new Date(end + "T23:59:59Z").getTime() / 1000) + 1;
-    const url = "https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(stock.yahoo) +
-      "?period1=" + p1 + "&period2=" + p2 + "&interval=" + interval + "&events=div%2Csplits";
+    const query = "?period1=" + p1 + "&period2=" + p2 + "&interval=" + interval + "&events=div%2Csplits";
+    const hosts = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"];
     let lastError;
     for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const response = await fetch("https://proxy.cors.dev/" + url, { headers: { "Accept": "application/json" } });
-        if (!response.ok) throw new Error("provider/relay HTTP " + response.status);
-        const payload = await response.json();
-        const result = payload.chart && payload.chart.result && payload.chart.result[0];
-        if (!result) throw new Error((payload.chart && payload.chart.error && payload.chart.error.description) || "No historical data returned");
-        const quote = result.indicators.quote[0];
-        const adjusted = result.indicators.adjclose && result.indicators.adjclose[0] && result.indicators.adjclose[0].adjclose || [];
-        const output = (result.timestamp || []).map(function (stamp, i) {
-          return {
-            date: new Date(stamp * 1000).toISOString().slice(0, 10),
-            open: quote.open[i], high: quote.high[i], low: quote.low[i],
-            close: quote.close[i], adjClose: adjusted[i] == null ? quote.close[i] : adjusted[i],
-            volume: quote.volume[i] == null ? 0 : quote.volume[i]
-          };
-        }).filter(function (bar) {
-          return [bar.open, bar.high, bar.low, bar.close].every(Number.isFinite);
-        });
-        if (!output.length) throw new Error("No valid OHLCV rows for this symbol/date range");
-        return output;
-      } catch (error) {
-        lastError = error;
-        if (attempt < 2) await sleep(400 * (attempt + 1));
+      for (const host of hosts) {
+        try {
+          const url = "https://" + host + "/v8/finance/chart/" + encodeURIComponent(stock.yahoo) + query;
+          const response = await fetch("https://proxy.cors.dev/" + url, {
+            method: "GET", mode: "cors", credentials: "omit",
+            headers: { "Accept": "application/json" }
+          });
+          if (!response.ok) throw new Error("Yahoo relay HTTP " + response.status);
+          const payload = await response.json();
+          const result = payload.chart && payload.chart.result && payload.chart.result[0];
+          if (!result) throw new Error((payload.chart && payload.chart.error && payload.chart.error.description) || "No Yahoo history returned");
+          const quote = result.indicators.quote[0];
+          const adjusted = result.indicators.adjclose && result.indicators.adjclose[0] && result.indicators.adjclose[0].adjclose || [];
+          const output = (result.timestamp || []).map(function (stamp, i) {
+            return {
+              date: new Date(stamp * 1000).toISOString().slice(0, 10),
+              open: quote.open[i], high: quote.high[i], low: quote.low[i],
+              close: quote.close[i], adjClose: adjusted[i] == null ? quote.close[i] : adjusted[i],
+              volume: quote.volume[i] == null ? 0 : quote.volume[i]
+            };
+          }).filter(function (bar) {
+            return [bar.open, bar.high, bar.low, bar.close].every(Number.isFinite);
+          });
+          if (!output.length) throw new Error("No valid OHLCV rows for " + stock.yahoo + " in " + start + " through " + end);
+          return output;
+        } catch (error) {
+          lastError = error;
+        }
       }
+      if (attempt < 2) await sleep(600 * (attempt + 1));
     }
     throw lastError || new Error("Data provider unavailable");
   }
@@ -358,7 +405,7 @@
       $("indiaProgressText").textContent = "Select at least one Indian company.";
       return;
     }
-    const buttons = [$("indiaDownloadSelected"), $("indiaDownloadAll")];
+    const buttons = [$("indiaDownloadSelected"), $("indiaDownloadAll"), $("indiaDownloadOriginal")];
     buttons.forEach(function (b) { b.disabled = true; });
     $("indiaFailures").textContent = "";
     $("indiaProgressFill").style.width = "0%";
@@ -373,25 +420,26 @@
         try {
           const history = await fetchStockHistory(stock, start, end, interval);
           history.forEach(function (bar) {
-            collected.push([bar.date, stock.symbol, stock.company, stock.sector, bar.open, bar.high, bar.low, bar.close, bar.adjClose, bar.volume]);
+            collected.push([bar.date, stock.symbol, stock.company, stock.sector, stock.universeGroup, stock.marketCapRank || "", stock.marketCapCr || "", bar.open, bar.high, bar.low, bar.close, bar.adjClose, bar.volume]);
           });
         } catch (error) {
           failures.push(stock.symbol + " — " + error.message);
         }
         completed++;
-        setProgress(completed, universe.length, "Fetching Indian historical data · " + completed + " / " + universe.length + " companies checked · " + collected.length.toLocaleString() + " rows received");
+        setProgress(completed, universe.length, "Fetching full available history · " + completed + " / " + universe.length + " companies checked · " + collected.length.toLocaleString() + " OHLCV rows · latest: " + stock.company);
       }
     }
     try {
-      await Promise.all(Array.from({ length: Math.min(4, universe.length) }, worker));
+      await Promise.all(Array.from({ length: Math.min(3, universe.length) }, worker));
       if (collected.length) {
         collected.sort(function (a, b) { return a[1].localeCompare(b[1]) || a[0].localeCompare(b[0]); });
-        const header = ["Date","Symbol","Company","Sector","Open","High","Low","Close","Adj Close","Volume"];
+        const header = ["Date","Symbol","Company","Sector","Universe","Market Cap Rank","Market Cap (INR Cr)","Open","High","Low","Close","Adj Close","Volume"];
         const csv = [header].concat(collected).map(function (r) { return r.map(csvEscape).join(","); }).join("\r\n");
-        downloadFile("india-nifty100-history-" + start + "-to-" + end + ".csv", csv);
+        const groupName = universe.length === 500 ? "additional-500" : universe.length === 100 ? "original-100" : "selected-companies";
+        downloadFile("india-" + groupName + "-full-history-" + start + "-to-" + end + ".csv", csv);
       }
       const successful = universe.length - failures.length;
-      setProgress(universe.length, universe.length, "Finished · " + successful + " / " + universe.length + " companies returned data · " + collected.length.toLocaleString() + " OHLCV rows downloaded.");
+      setProgress(universe.length, universe.length, "Finished · " + successful + " / " + universe.length + " companies returned history · " + collected.length.toLocaleString() + " OHLCV rows · successful files contain each stock from its earliest provider bar through " + end + ".");
       if (failures.length) {
         $("indiaFailures").textContent = "No data / request failed for " + failures.length + " symbols: " + failures.slice(0, 16).join(" | ") + (failures.length > 16 ? " | +" + (failures.length - 16) + " more" : "");
       }
@@ -402,7 +450,8 @@
   $("indiaDownloadSelected").addEventListener("click", function () {
     runBulkDownload(stocks.filter(function (s) { return selected.has(s.symbol); }));
   });
-  $("indiaDownloadAll").addEventListener("click", function () { runBulkDownload(stocks); });
+  $("indiaDownloadAll").addEventListener("click", function () { runBulkDownload(additionalStocks); });
+  $("indiaDownloadOriginal").addEventListener("click", function () { runBulkDownload(originalStocks); });
   $("indiaUseOne").addEventListener("click", function () {
     if (selected.size !== 1) {
       $("indiaProgressText").textContent = "Select exactly one company, then use it in the backtest.";
@@ -419,4 +468,4 @@
   });
   renderList();
   document.body.classList.add("india-market");
-})();
+})().catch(function (error) { console.error("India universe failed to initialise:", error); const status = document.getElementById("dataStatus"); if (status) { status.textContent = "India market universe could not initialise: " + error.message; status.className = "status error"; } });
