@@ -1,4 +1,4 @@
-name: Probe market-cap universe pagination
+name: Locate full market-cap list endpoint
 on:
   push:
     paths:
@@ -8,22 +8,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect market-cap pagination
+      - name: Inspect list controls
         run: |
           node --input-type=module <<'NODE'
-          for (const page of [1,2,3,10]) {
-            const url="https://stockexact.com/stocks/small-cap"+(page===1?"":"?page="+page);
-            const res=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0"}});
-            const html=await res.text();
-            const rows=html.split('<li><div class="sr-row sr-val">').slice(1).map(x=>x.split("</li>")[0]);
-            const syms=rows.map(row=>row.split('class="sr-name" href="/stocks/')[1]?.split('"')[0]);
-            const first=rows[0]?.split('class="sr-name" href="/stocks/')[1]?.split('">')[1]?.split("</a>")[0];
-            const last=rows.at(-1)?.split('class="sr-name" href="/stocks/')[1]?.split('">')[1]?.split("</a>")[0];
-            console.log("PAGE",page,"HTTP",res.status,"ROWS",rows.length,"UNIQUE",new Set(syms.filter(Boolean)).size,"FIRST",first,"LAST",last);
-            if(page===1) {
-              console.log("PAGINATION_LINKS",html.match(/href="[^"]*(?:page|cursor|offset)[^"]*"/gi)?.slice(-30));
-              const nav=html.indexOf("Pagination");
-              console.log("PAGINATION_TEXT",nav>=0?html.slice(nav-1000,nav+2500):html.slice(-5000));
-            }
+          const html=await (await fetch("https://stockexact.com/stocks/small-cap",{headers:{"User-Agent":"Mozilla/5.0"}})).text();
+          for (const term of ["View all","view all","See all","see all","Load more","load more","500 largest","500 stocks","Next","next","Page 1","page 1","Show all","show all"]) {
+            const i=html.toLowerCase().indexOf(term.toLowerCase());
+            if(i>=0)console.log("\nTERM",term,"AT",i,"\n",html.slice(Math.max(0,i-900),Math.min(html.length,i+1700)));
           }
+          const links=[...html.matchAll(/href="([^"]+)"/g)].map(x=>x[1]);
+          console.log("\nMAIN_LINKS",links.filter(x=>/stock|small|cap|more|all|list|page|rank/i.test(x)).slice(-120));
+          const ul=html.indexOf('<ul aria-label="Small cap stocks"');
+          const ulEnd=html.indexOf("</ul>",ul);
+          console.log("\nTABLE_END",html.slice(ulEnd,ulEnd+6500));
+          const scripts=[...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(x=>x[1]);
+          console.log("\nSCRIPTS",scripts);
           NODE
