@@ -1,27 +1,53 @@
-name: Extract embedded market-cap rows
+name: Export additional 500 market-cap universe
 on:
   push:
     paths:
       - '.github/workflows/universe-source-probe.yml'
 jobs:
-  inspect:
+  export:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect embedded full list payload
+      - name: Extract complete 500-row stock payload
         run: |
           node --input-type=module <<'NODE'
           const html=await (await fetch("https://stockexact.com/stocks/small-cap",{headers:{"User-Agent":"Mozilla/5.0"}})).text();
-          const terms=["ATHERENERG","WELCORP","RBLBANK","JKLAKSHMI","TATAELXSI","AAVAS","Show all 500 companies","marketCap","divYield"];
-          for(const term of terms){
-            const hits=[];let from=0,p;
-            while((p=html.indexOf(term,from))>=0){hits.push(p);from=p+term.length;if(hits.length>=8)break;}
-            console.log("TERM",term,"COUNT_UP_TO_8",hits.length,"POSITIONS",hits);
-            if(hits.length>2)console.log("LAST_CONTEXT",html.slice(Math.max(0,hits.at(-1)-350),Math.min(html.length,hits.at(-1)+550)));
+          const flight=[];
+          for(const m of html.matchAll(/self\.__next_f\.push\(\[1,("(?:\\.|[^"\\])*")\]\)/g)){
+            try{flight.push(JSON.parse(m[1]))}catch{}
           }
-          const props=[...html.matchAll(/"symbol"s*:s*"([A-Z0-9&.-]+)"/g)].map(x=>x[1]);
-          const caps=[...html.matchAll(/"marketCap"s*:s*(d+(?:.d+)?)/g)].map(x=>Number(x[1]));
-          console.log("JSON_SYMBOLS",props.length,"UNIQUE",new Set(props).size,"FIRST",props.slice(0,10),"LAST",props.slice(-10),"CAPS",caps.length);
-          const rowStarts=[...html.matchAll(/"symbol"s*:s*"([A-Z0-9&.-]+)"/g)].slice(0,5);
-          for(const m of rowStarts)console.log("ROW_CONTEXT",html.slice(m.index-150,m.index+700));
+          const data=flight.join("\n");
+          const marker='"rows":';
+          const at=data.indexOf(marker);
+          if(at<0)throw Error("Could not locate rows array in server payload");
+          const start=at+marker.length;
+          let depth=0,inString=false,escape=false,end=-1;
+          for(let i=start;i<data.length;i++){
+            const ch=data[i];
+            if(inString){if(escape)escape=false;else if(ch==="\\")escape=true;else if(ch==='"')inString=false;continue}
+            if(ch==='"'){inString=true;continue}
+            if(ch==="[")depth++;
+            else if(ch==="]"){depth--;if(depth===0){end=i+1;break}}
+          }
+          if(end<0)throw Error("Could not close rows array");
+          const raw=JSON.parse(data.slice(start,end));
+          if(raw.length!==500)throw Error("Expected exactly 500 source rows, found "+raw.length);
+          const decode=s=>String(s||"").replace(/&amp;/g,"&").replace(/&#x27;|&#39;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,"<").replace(/&gt;/g,">");
+          const records=raw.map((r,i)=>({
+            rank:i+1,
+            symbol:String(r[1]||"").trim().toUpperCase(),
+            company:decode(r[2]),
+            sector:decode(r[5]),
+            marketCapCr:Number(r[8]),
+            lastClosePriceINR:Number(r[6])||null,
+            source:"StockExact small-cap 500",
+            sourceDate:"2026-11-02"
+          }));
+          const symbols=records.map(x=>x.symbol);
+          if(symbols.some(x=>!x)||new Set(symbols).size!==500)throw Error("500-row source contains blank or duplicate symbols");
+          if(records.some(x=>!x.company||!x.sector||!Number.isFinite(x.marketCapCr)))throw Error("Missing company/sector/market cap in source rows");
+          console.log("JSON_BEGIN");
+          console.log(JSON.stringify(records));
+          console.log("JSON_END");
+          console.log("VALIDATION",JSON.stringify({records:records.length,unique:new Set(symbols).size,first:records[0],last:records.at(-1)}));
           NODE
