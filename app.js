@@ -250,9 +250,12 @@ function evaluateFormula(ast,data,index,cache=new Map(),parameterValues={},serie
    }
    if(HTF_INDICATORS[name]||["htf_macd","htf_macd_signal","htf_macd_hist"].includes(name)){
     const p=args.map(x=>numeric(ev(x,at))),field=HTF_INDICATORS[name]||(name==="htf_macd"?"macd":name==="htf_macd_signal"?"macd_signal":"macd_hist"),params={};
-    if(name.startsWith("htf_macd")){params.fast=p[0]||12;params.slow=p[1]||26;params.signal=p[2]||9}
+    if(name.startsWith("htf_macd")||name==="htf_ppo"){params.fast=p[0]||12;params.slow=p[1]||26;params.signal=p[2]||9}
     else if(name==="htf_supertrend")params.multiplier=p[1]||3;
-    const factor=Math.max(2,Math.min(250,Math.floor(p.at(-1)||5))),period=name.startsWith("htf_macd")?params.slow:p[0]||14;
+    else if(name==="htf_kama"){params.fast=p[1]||2;params.slow=p[2]||30}
+    else if(name==="htf_psar"){params.step=p[0]||.02;params.max=p[1]||.2}
+    else if(name==="htf_ultimate_osc"){params.fast=p[1]||14;params.slow=p[2]||28}
+    const factor=Math.max(2,Math.min(250,Math.floor(p.at(-1)||5))),period=name.startsWith("htf_macd")||name==="htf_ppo"?params.slow:name==="htf_psar"?14:p[0]||14;
     const values=higherTimeframeSeries(data,field,period,factor,params,cache);return values[at]
    }
    if(name==="crossesabove"||name==="crossover"||name==="crossesbelow"||name==="crossunder"){if(at<1)return false;const a=numeric(ev(args[0],at)),b=numeric(ev(args[1],at)),pa=numeric(ev(args[0],at-1)),pb=numeric(ev(args[1],at-1));return name==="crossesabove"||name==="crossover"?pa<=pb&&a>b:pa>=pb&&a<b}
@@ -285,7 +288,7 @@ function evaluateFormula(ast,data,index,cache=new Map(),parameterValues={},serie
  }
  const result=ev(ast,index);return numeric(result)
 }
-const HTF_INDICATORS={htf_sma:"sma",htf_ema:"ema",htf_rsi:"rsi",htf_atr:"atr",htf_adx:"adx",htf_roc:"roc",htf_hma:"hma",htf_dema:"dema",htf_tema:"tema",htf_supertrend:"supertrend"};
+const HTF_INDICATORS={htf_sma:"sma",htf_ema:"ema",htf_rsi:"rsi",htf_atr:"atr",htf_adx:"adx",htf_roc:"roc",htf_hma:"hma",htf_dema:"dema",htf_tema:"tema",htf_kama:"kama",htf_psar:"psar",htf_supertrend:"supertrend",htf_ppo:"ppo",htf_ultimate_osc:"ultimate_osc"};
 const CUSTOM_INDICATOR_IDS=["v1","v2","v3","v4","v5","v6","v7","v8","v9","v10"];
 function collectCustomIndicatorRefs(node,refs=new Set()){
  if(!node)return refs;
