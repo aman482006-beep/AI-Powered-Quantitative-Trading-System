@@ -223,14 +223,14 @@
   const tickerHint = document.createElement("div");
   tickerHint.className = "ticker-selection-hint";
   tickerHint.id = "tickerSelectionHint";
-  tickerHint.textContent = "Search 600 Indian companies by name or NSE symbol";
+  tickerHint.textContent = "Search " + stocks.length.toLocaleString("en-IN") + " NSE-listed companies by name or symbol";
   tickerWrap.appendChild(tickerHint);
   let activeTickerOption = -1;
   let visibleTickerOptions = [];
   function rankedTickerMatches(query) {
     const q = query.trim().toLowerCase();
     const matches = stocks.filter(function (s) {
-      return !q || (s.symbol + " " + s.company + " " + s.sector).toLowerCase().indexOf(q) >= 0;
+      return !q || (s.symbol + " " + s.company + " " + s.sector + " " + s.classification).toLowerCase().indexOf(q) >= 0;
     });
     matches.sort(function (a,b) {
       if (!q) return a.company.localeCompare(b.company);
@@ -238,7 +238,7 @@
       const bRank = b.symbol.toLowerCase() === q ? 0 : b.symbol.toLowerCase().startsWith(q) ? 1 : b.company.toLowerCase().startsWith(q) ? 2 : 3;
       return aRank-bRank || a.company.localeCompare(b.company);
     });
-    return matches.slice(0,8);
+    return matches;
   }
   function chooseTicker(stock) {
     tickerInput.value = stock.yahoo;
@@ -254,15 +254,34 @@
   function paintTickerMenu() {
     visibleTickerOptions = rankedTickerMatches(tickerInput.value.replace(/\.NS$/i,""));
     activeTickerOption = -1;
-    tickerMenu.innerHTML = visibleTickerOptions.map(function (s,i) {
-      return '<button type="button" id="ticker-option-'+i+'" class="ticker-option" role="option" aria-selected="false" data-index="'+i+'"><span class="ticker-option-name">'+escapeHTML(s.company)+'</span><span class="ticker-option-meta"><b>'+escapeHTML(s.symbol)+'.NS</b><small>'+escapeHTML(s.sector)+'</small></span></button>';
-    }).join("") || '<div class="ticker-no-match">No Indian-company match. Check the spelling or search by NSE symbol.</div>';
+    const query = tickerInput.value.replace(/\.NS$/i,"").trim();
+    const matchCount = visibleTickerOptions.length.toLocaleString("en-IN");
+    const menuTitle = query
+      ? matchCount + " matches for “" + escapeHTML(query) + "”"
+      : stocks.length.toLocaleString("en-IN") + " companies in the NSE universe";
+    tickerMenu.innerHTML =
+      '<div class="ticker-menu-head"><b>' + menuTitle + '</b><span>Scroll to browse · ↑ ↓ to select</span></div>' +
+      (visibleTickerOptions.map(function (s,i) {
+        return '<button type="button" id="ticker-option-'+i+'" class="ticker-option" role="option" aria-selected="false" data-index="'+i+'"><span class="ticker-option-name">'+escapeHTML(s.company)+'</span><span class="ticker-option-meta"><b>'+escapeHTML(s.symbol)+'.NS</b><small>'+escapeHTML(s.sector)+'</small></span></button>';
+      }).join("") || '<div class="ticker-no-match">No Indian-company match. Check the spelling or search by NSE symbol.</div>') +
+      (query ? '<button type="button" class="ticker-browse-all">Browse all ' + stocks.length.toLocaleString("en-IN") + ' companies</button>' : '');
     tickerMenu.hidden = false;
     tickerInput.setAttribute("aria-expanded","true");
     tickerMenu.querySelectorAll(".ticker-option").forEach(function (button) {
       button.addEventListener("mousedown",function (event) { event.preventDefault(); });
       button.addEventListener("click",function () { chooseTicker(visibleTickerOptions[Number(button.dataset.index)]); });
     });
+    const browseAll = tickerMenu.querySelector(".ticker-browse-all");
+    if (browseAll) {
+      browseAll.addEventListener("mousedown",function (event) { event.preventDefault(); });
+      browseAll.addEventListener("click",function () {
+        tickerInput.value = "";
+        tickerInput.dataset.selectedSymbol = "";
+        tickerHint.textContent = "Browsing all " + stocks.length.toLocaleString("en-IN") + " NSE-listed companies";
+        tickerHint.classList.remove("selected");
+        paintTickerMenu();
+      });
+    }
   }
   function setActiveTicker(index) {
     activeTickerOption = Math.max(0,Math.min(index,visibleTickerOptions.length-1));
@@ -271,7 +290,10 @@
       button.setAttribute("aria-selected",i===activeTickerOption?"true":"false");
     });
     const active = tickerMenu.querySelectorAll(".ticker-option")[activeTickerOption];
-    if (active) tickerInput.setAttribute("aria-activedescendant",active.id || "");
+    if (active) {
+      tickerInput.setAttribute("aria-activedescendant",active.id || "");
+      active.scrollIntoView({block:"nearest"});
+    }
   }
   tickerInput.addEventListener("focus",paintTickerMenu);
   tickerInput.addEventListener("input",function () {
@@ -306,7 +328,7 @@
   const marketPill = document.querySelector(".market-pill");
   if (marketPill) marketPill.innerHTML = '<i></i> NSE INDIA · INR · HISTORICAL MODE';
   const dataHeading = document.querySelector("#page-data .section-head p");
-  if (dataHeading) dataHeading.textContent = "Indian equity data only. Browse the Nifty 100 universe, fetch historical OHLCV bars, or upload your own NSE dataset.";
+  if (dataHeading) dataHeading.textContent = "Indian equity data only. Browse all " + stocks.length.toLocaleString("en-IN") + " NSE-listed companies, fetch historical OHLCV bars, or upload your own NSE dataset."
   const navData = document.querySelector('[data-tab="data"] span');
   if (navData) navData.textContent = "India universe";
   const providerCopy = document.querySelector("#page-data .muted-copy");
@@ -314,18 +336,18 @@
   const providerRows = document.querySelectorAll("#page-data .provider-row");
   if (providerRows.length > 1) {
     providerRows[0].querySelector("span:first-child").textContent = "Yahoo Finance · NSE symbols";
-    providerRows[1].querySelector("span:first-child").textContent = "Nifty 100 universe";
-    providerRows[1].querySelector("span:last-child").textContent = "100 INDIAN COMPANIES";
+    providerRows[1].querySelector("span:first-child").textContent = "Indian company universe";
+    providerRows[1].querySelector("span:last-child").textContent = stocks.length.toLocaleString("en-IN") + " INDIAN COMPANIES";
   }
 
-  // Restrict both the fetch button and the backtest shortcut to Indian Nifty 100 symbols.
+  // Restrict both the fetch button and the backtest shortcut to the loaded Indian NSE universe.
   function enforceIndianTicker(event) {
     const input = $("ticker");
     const typed = input.value.trim().toUpperCase().replace(/\.NS$/, "");
     const match = stocks.find(function (s) { return s.symbol === typed; });
     if (!match && $("source").value !== "sample") {
       event.stopImmediatePropagation();
-      $("dataStatus").textContent = "Choose an Indian Nifty 100 company from the ticker suggestions.";
+      $("dataStatus").textContent = "Choose an Indian NSE-listed company from the ticker suggestions.";
       $("dataStatus").className = "status error";
       return;
     }
