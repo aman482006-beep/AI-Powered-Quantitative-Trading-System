@@ -186,7 +186,7 @@ function parseFormula(source){
  }
  function expression(min){
   let left=primary();
-  while(peek().type==="operator"&&precedence[peek().value]>=min){const op=take().value,level=precedence[op],right=expression(level+(op==="**"?0:1));left={type:"binary",op,left,right}}
+  while(peek().type==="operator"&&precedence[peek().value]>=min){const op=take().value,level=precedence[op],right=expression(level+(op==="**"||op==="^"?0:1));left={type:"binary",op,left,right}}
   return left
  }
  const ast=expression(0);if(peek().type!=="eof")throw Error("Unexpected '"+peek().value+"' at the end of formula.");return ast
