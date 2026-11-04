@@ -321,3 +321,5 @@ footer{border-color:#e1e8e1;color:#829087}
 .preset-buttons{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
 .preset-buttons button{border:1px solid #d9e5da;background:#fff;color:#3e694b;border-radius:18px;padding:7px 10px;font:600 10px var(--font);cursor:pointer;transition:background .15s,border-color .15s,transform .15s}
 .preset-buttons button:hover{background:#edf5ee;border-color:#a9c8af;transform:translateY(-1px)}
+
+.field-hint{display:block;margin-top:5px;color:#7a887e;font:9px/1.55 var(--font);letter-spacing:0}
