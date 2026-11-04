@@ -177,8 +177,8 @@ function parseFormula(source){
  const ast=expression(0);if(peek().type!=="eof")throw Error("Unexpected '"+peek().value+"' at the end of formula.");return ast
 }
 const FORMULA_INDICATORS={sma:"sma",ema:"ema",wma:"wma",vwma:"vwma",rsi:"rsi",atr:"atr",adx:"adx",cci:"cci",roc:"roc",obv:"obv",vwap:"vwap",macd:"macd",macd_signal:"macd_signal",macd_hist:"macd_hist",bb_upper:"bb_upper",bb_middle:"bb_middle",bb_lower:"bb_lower",stoch_k:"stoch_k",stoch_d:"stoch_d",donchian_high:"donchian_high",donchian_low:"donchian_low",volume_sma:"volume_sma",mfi:"mfi",williams_r:"williams_r",aroon_up:"aroon_up",aroon_down:"aroon_down",aroon_osc:"aroon_osc",cmf:"cmf",trix:"trix",keltner_upper:"keltner_upper",keltner_middle:"keltner_middle",keltner_lower:"keltner_lower",chaikin_osc:"chaikin_osc",dpo:"dpo"};
-function evaluateFormula(ast,data,index,cache=new Map(),parameterValues={}){
- const n=data.length,bar=data[index],seriesCache=new Map();if(!bar)return NaN;
+function evaluateFormula(ast,data,index,cache=new Map(),parameterValues={},seriesCache=new Map()){
+ const n=data.length,bar=data[index];if(!bar)return NaN;
  const numeric=x=>typeof x==="boolean"?(x?1:0):Number(x);
  function ev(node,at=index){
   if(at<0||at>=n)return NaN;
@@ -224,8 +224,8 @@ function evaluateFormula(ast,data,index,cache=new Map(),parameterValues={}){
  const result=ev(ast,index);return numeric(result)
 }
 function compileFormulaSignals(data,entryText,exitText,parameterValues={}){
- const entryAst=parseFormula(entryText),exitAst=parseFormula(exitText),entry=Array(data.length).fill(false),exit=Array(data.length).fill(false),cache=new Map();
- for(let i=1;i<data.length;i++){const e=evaluateFormula(entryAst,data,i,cache,parameterValues),x=evaluateFormula(exitAst,data,i,cache,parameterValues);entry[i]=Number.isFinite(e)&&!!e;exit[i]=Number.isFinite(x)&&!!x}
+ const entryAst=parseFormula(entryText),exitAst=parseFormula(exitText),entry=Array(data.length).fill(false),exit=Array(data.length).fill(false),cache=new Map(),seriesCache=new Map();
+ for(let i=1;i<data.length;i++){const e=evaluateFormula(entryAst,data,i,cache,parameterValues,seriesCache),x=evaluateFormula(exitAst,data,i,cache,parameterValues,seriesCache);entry[i]=Number.isFinite(e)&&!!e;exit[i]=Number.isFinite(x)&&!!x}
  return{entry,exit}
 }
 function calcCustomSignals(data,strategy){
