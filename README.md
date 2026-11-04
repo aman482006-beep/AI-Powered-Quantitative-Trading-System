@@ -57,7 +57,7 @@ Optional LLM configuration: copy `.env.example` to `.env` and set `GEMINI_API_KE
 
 ## Custom strategy builder
 
-The GitHub Pages app includes a no-code visual builder and a safe formula editor.
+The GitHub Pages app includes a no-code visual builder and a safe formula editor. The formula editor includes editable starter templates for trend following, RSI bounce, Donchian breakout, Bollinger reversion, MACD crossover, and MACD long/short logic.
 
 ### Visual builder
 
@@ -98,7 +98,7 @@ Named strategies can be loaded, duplicated, edited and deleted. They are saved i
 - The browser engine supports one open position in one selected instrument at a time. A long/short strategy can reverse when the opposite-side entry signal appears. It does not pyramid or hold several symbols simultaneously.
 - Position sizing supports percent of equity, fixed INR allocation, or risk-based sizing. Risk-based sizing requires a stop-loss percentage and caps notional exposure at current equity; leverage is not used.
 - Long and short positions are marked to market with signed quantities. Short-sale proceeds are credited to cash and the short liability is marked against current price. The simulator does not assume that a security is always available to borrow.
-- Commission and slippage settings are applied to market entries and exits. Stop-loss, trailing-stop and take-profit triggers are checked against subsequent OHLC bars; stop-loss is assumed first if both stop and target are touched in one bar. Trailing stops use the best price observed on prior completed bars.
+- Commission and slippage settings are applied to market entries and market exits. Stop-loss, trailing-stop and take-profit triggers are checked against subsequent OHLC bars; stop-loss is assumed first if both stop and target are touched in one bar. Stop-market fills use the bar open when price gaps through the stop, otherwise the stop level, then apply configured slippage. Take-profit triggers use the limit level. Trailing stops use the best price observed on prior completed bars.
 - A maximum holding-bar limit can close positions at the next bar open. Any open position at the end of the test is liquidated at the final close with configured slippage/commission.
 - Sharpe and Sortino use the configurable annual risk-free rate converted to a per-bar rate. Annualisation factors are 252 daily, 52 weekly and 12 monthly. CAGR uses elapsed calendar years.
 - The buy-and-hold line is a long benchmark, even when testing a short-only strategy; compare it as market context rather than a like-for-like short benchmark.
