@@ -65,9 +65,11 @@ Create separate long-entry, long-exit, short-entry and short-cover rules. Each g
 
 Supported visual fields and indicators:
 - Price and volume: Open, High, Low, Close, Volume, HL2, HLC3, OHLC4.
-- Trend and volume-weighted: SMA, EMA, WMA, VWMA, rolling VWAP, volume SMA.
-- Momentum and volatility: RSI, MACD line/signal/histogram, ATR, ADX, CCI, ROC.
-- Bands and range: Bollinger upper/middle/lower, Stochastic %K/%D, Donchian high/low, OBV.
+- Trend and volume-weighted: SMA, EMA, WMA, VWMA, rolling VWAP, volume SMA, Keltner channels.
+- Momentum and volatility: RSI, MACD line/signal/histogram, ATR, ADX, CCI, ROC, TRIX, Williams %R, DPO.
+- Flow and range: MFI, Aroon up/down/oscillator, Chaikin Money Flow, Chaikin oscillator, Bollinger bands, Stochastic %K/%D, Donchian high/low, OBV.
+
+CSV files can include additional numeric columns alongside OHLCV, for example sentiment, P/E, revenue growth, index returns, factor scores or proprietary signals. Each extra numeric column becomes a formula variable prefixed with `x_` (for example `x_sentiment` or `x_pe`) and is available in the visual rule builder after upload. Missing cells remain missing; the app does not forward-fill or interpolate them. Users must align feature values to the correct historical timestamp and avoid look-ahead leakage. Formula indicators can operate over custom series too, for example `SMA(x_sentiment, 20)` or `EMA(x_revenue_growth, 10)`.
 
 Comparisons include crosses above/below, greater than, less than, greater/equal and less/equal. Indicator parameters (periods, MACD fast/slow/signal and Bollinger multiplier) are editable per rule.
 
