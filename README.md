@@ -8,7 +8,7 @@ QuantLab is a historical quantitative research and simulation platform. It provi
 
 | Version | Where it runs | What works |
 |---|---|---|
-| GitHub Pages | Static browser app in `index.html` | Historical provider fetch where browser CORS allows, CSV upload, indicators used by strategies, backtests, costs, stops/targets, metrics, charts, trade history, CSV/text exports, rule-based research assistant |
+| GitHub Pages | Static browser app in `index.html` | Historical provider fetch where browser CORS allows (daily, weekly, monthly and supported intraday intervals), CSV upload with timestamped OHLCV bars, visual/formula custom strategies, long/short simulation, position sizing and exit controls, parameter sweeps, metrics, charts, trade history and exports |
 | Python / Streamlit | Your computer or a Python hosting service | Python data pipeline, pandas/NumPy research components and optional Gemini integration |
 
 **Important:** GitHub Pages cannot run Python, Streamlit, SQLite, or server-side secrets. Pages serves static HTML/CSS/JavaScript only. The browser app is therefore self-contained and does not pretend to expose the Python backend.
@@ -30,7 +30,7 @@ The app opens with a synthetic demo series. The Indian equity universe contains 
 
 When a browser blocks provider requests, that is a provider/network/CORS restriction rather than evidence that a symbol does not exist. Use CSV upload or the Python data path.
 
-CSV required fields (case-insensitive): `Date, Open, High, Low, Close, Volume`. `Adj Close` is optional. Example:
+CSV required fields (case-insensitive): `Date, Open, High, Low, Close, Volume`. `Adj Close` is optional. The `Date` field may include a time and timezone (for example `2026-10-01T09:15:00+05:30`); intraday timestamps are preserved and duplicate timestamps are rejected. Select the matching bar interval in the terminal. Use the **Bars per year** override for non-standard calendars or 24/7 markets. Example:
 
 ```csv
 Date,Open,High,Low,Close,Volume
