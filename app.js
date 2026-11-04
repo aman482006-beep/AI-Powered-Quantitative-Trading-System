@@ -415,7 +415,7 @@ async function runUniverseComparison(){
  const start=$("startDate").value,end=$("endDate").value,interval=$("interval").value;
  if(!start||!end||start>=end){$("batchStatus").textContent="Choose a valid start and end date in the research terminal first.";return}
  const selectedType=$("strategy").value,override=selectedType.startsWith("custom:")?customStrategies.find(x=>x.id===selectedType.slice(7)):null;
- if(selectedType.startsWith("custom:")&&!override){$("batchStatus").textContent="The selected custom strategy could not be found. Load it again from the strategy library.";return}
+ if(selectedType.startsWith("custom:")&&!override){$("batchStatus").textContent="The selected custom strategy could not be found. Load it again from the strategy library.";return}if(override&&(()=>{const formulas=[override.entryFormula,override.exitFormula,override.shortEntryFormula,override.shortExitFormula].join(" ");const rules=[...(override.entry||[]),...(override.exit||[]),...(override.shortEntry||[]),...(override.shortExit||[])];return /\\bx_[a-z0-9_]+\\b/i.test(formulas)||rules.some(rule=>String(rule.left?.field||"").startsWith("x_")||String(rule.right?.field||"").startsWith("x_"))})()){ $("batchStatus").textContent="This strategy uses extra CSV feature columns. Cross-symbol Yahoo tests do not include those custom columns, so the result would be misleading. Test symbols with a separate feature-enriched dataset for each one instead.";return}
  const original={bars,lastSymbol,sourceMeta,lastAdjustmentMode,customFeatureFields:[...customFeatureFields]};
  const button=$("runUniverseTest");button.disabled=true;button.textContent="Testing…";$("runBacktest").disabled=true;$("loadData").disabled=true;
  lastBatchResults=[];$("exportBatchResults").hidden=true;
