@@ -406,6 +406,49 @@ function bindBuilderEvents(){
 bindBuilderEvents();renderBuilder();
 function renderStrategyCards(){$("strategyCards").innerHTML=Object.entries(strategies).map(([k,s])=>'<div class="strategy-card" data-strategy="'+k+'"><span>STRATEGY / '+k.toUpperCase()+'</span><br/><b>'+s.name+'</b><p>'+s.desc+'</p><span>LOAD CONFIGURATION ↗</span></div>').join("");document.querySelectorAll(".strategy-card").forEach(el=>el.addEventListener("click",()=>{$("strategy").value=el.dataset.strategy;renderParams();document.querySelector('[data-tab="terminal"]').click()}))}
 renderStrategyCards();
+let lastBatchResults=[];
+async function runUniverseComparison(){
+ const raw=$("batchTickers").value.split(/[\\n,;\\s]+/).map(x=>x.trim().toUpperCase()).filter(Boolean),symbols=[...new Set(raw.map(x=>x.includes(".")?x:x+".NS"))];
+ if(!symbols.length){$("batchStatus").textContent="Add at least one ticker, for example RELIANCE or TCS.";return}
+ if(symbols.length>10){$("batchStatus").textContent="Please test up to 10 symbols per run. Split a larger universe into batches.";return}
+ if($("runBacktest").disabled||$("loadData").disabled){$("batchStatus").textContent="Another data or backtest task is already running. Wait for it to finish.";return}
+ const start=$("startDate").value,end=$("endDate").value,interval=$("interval").value;
+ if(!start||!end||start>=end){$("batchStatus").textContent="Choose a valid start and end date in the research terminal first.";return}
+ const selectedType=$("strategy").value,override=selectedType.startsWith("custom:")?customStrategies.find(x=>x.id===selectedType.slice(7)):null;
+ if(selectedType.startsWith("custom:")&&!override){$("batchStatus").textContent="The selected custom strategy could not be found. Load it again from the strategy library.";return}
+ const original={bars,lastSymbol,sourceMeta,lastAdjustmentMode,customFeatureFields:[...customFeatureFields]};
+ const button=$("runUniverseTest");button.disabled=true;button.textContent="Testing…";$("runBacktest").disabled=true;$("loadData").disabled=true;
+ lastBatchResults=[];$("exportBatchResults").hidden=true;
+ $("batchStatus").textContent="Preparing "+symbols.length+" independent tests · "+interval+" bars · "+start+" to "+end+". CSV-only custom columns are not present in Yahoo symbol data.";
+ try{
+  for(let i=0;i<symbols.length;i++){
+   const symbol=symbols[i];$("batchStatus").textContent="Testing "+symbol+" · "+(i+1)+" of "+symbols.length;
+   try{
+    const rows=await getYahoo(symbol,start,end,interval),candidate=normaliseBars(rows);
+    bars=candidate;lastSymbol=symbol;sourceMeta="Yahoo Finance historical data";
+    const result=await runSimulation(null,override);
+    lastBatchResults.push({symbol,status:"ok",start:result.start,end:result.end,bars:candidate.length,return:result.totalReturn,cagr:result.cagr,sharpe:result.sharpe,sortino:result.sortino,maxDD:result.maxDD,winRate:result.winRate,profitFactor:result.profitFactor,trades:result.nTrades,borrowFees:result.borrowFees||0,final:result.final});
+   }catch(error){lastBatchResults.push({symbol,status:"error",error:error.message})}
+   $("batchResults").innerHTML=renderBatchResults(lastBatchResults);
+   await new Promise(resolve=>setTimeout(resolve,160));
+  }
+ }finally{
+  bars=original.bars;lastSymbol=original.lastSymbol;sourceMeta=original.sourceMeta;lastAdjustmentMode=original.lastAdjustmentMode;customFeatureFields=original.customFeatureFields;
+  refreshCustomFeatureControls();renderDataSummary();
+  button.disabled=false;button.textContent="Run cross-symbol test";$("runBacktest").disabled=false;$("loadData").disabled=false;
+ }
+ const passed=lastBatchResults.filter(x=>x.status==="ok").length;
+ $("batchStatus").textContent="Finished · "+passed+" of "+symbols.length+" symbols returned usable results. Ranked table is sorted by Sharpe ratio; inspect drawdown and trade count too.";
+ $("exportBatchResults").hidden=!passed;
+ setStatus("Cross-symbol test finished · "+passed+"/"+symbols.length+" successful");
+}
+function renderBatchResults(rows){
+ const good=rows.filter(x=>x.status==="ok").sort((a,b)=>b.sharpe-a.sharpe),bad=rows.filter(x=>x.status!=="ok");
+ if(!rows.length)return"";
+ return'<div class="batch-result-summary">'+good.length+' successful · '+bad.length+' unavailable or failed</div><div class="batch-table-wrap"><table class="batch-table"><thead><tr><th>SYMBOL</th><th>BARS</th><th>RETURN</th><th>CAGR</th><th>SHARPE</th><th>MAX DD</th><th>WIN RATE</th><th>TRADES</th><th>FINAL EQUITY</th></tr></thead><tbody>'+good.map(x=>'<tr><td><b>'+escapeHtml(x.symbol)+'</b></td><td>'+x.bars+'</td><td class="'+(x.return>=0?"positive":"negative")+'">'+fmt(x.return*100)+'%</td><td>'+fmt(x.cagr*100)+'%</td><td>'+fmt(x.sharpe)+'</td><td class="negative">'+fmt(x.maxDD*100)+'%</td><td>'+fmt(x.winRate*100)+'%</td><td>'+x.trades+'</td><td>₹'+fmt(x.final,0)+'</td></tr>').join("")+bad.map(x=>'<tr><td>'+escapeHtml(x.symbol)+'</td><td colspan="8" class="batch-error">'+escapeHtml(x.error||"No usable data")+'</td></tr>').join("")+'</tbody></table></div>'
+}
+$("runUniverseTest").addEventListener("click",runUniverseComparison);
+$("exportBatchResults").addEventListener("click",()=>{const rows=lastBatchResults.map(x=>[x.symbol,x.status,x.start||"",x.end||"",x.bars||0,x.return??"",x.cagr??"",x.sharpe??"",x.sortino??"",x.maxDD??"",x.winRate??"",x.profitFactor??"",x.trades??"",x.borrowFees??"",x.final??"",x.error||""]);const head=["symbol","status","start","end","bars","return","cagr","sharpe","sortino","max_drawdown","win_rate","profit_factor","trades","borrow_fees","final_equity","error"];download("quantlab-cross-symbol-results.csv",[head,...rows].map(row=>row.map(csvEscape).join(",")).join("\\n"),"text/csv")});
 $("runValidation").addEventListener("click",async()=>{if(bars.length<100){$("validationOutput").textContent="Load at least 100 bars first.";return}const cut=Math.floor(bars.length*.7),full=bars;const originalBars=bars;try{bars=full.slice(0,cut);const train=await runSimulation();bars=full.slice(cut-1);const test=await runSimulation();bars=originalBars;$("validationOutput").textContent="CHRONOLOGICAL 70 / 30 SPLIT\nTraining: "+full[0].date+" → "+full[cut-1].date+" · return "+fmt(train.totalReturn*100)+"% · Sharpe "+fmt(train.sharpe)+"\nTesting: "+full[cut-1].date+" → "+full.at(-1).date+" · return "+fmt(test.totalReturn*100)+"% · Sharpe "+fmt(test.sharpe)+"\n\nParameters held fixed across the split. Signals only use past/current completed bars; entries execute next open. This is a single holdout, not a robust walk-forward study."}catch(e){bars=originalBars;$("validationOutput").textContent="Validation failed: "+e.message}});
 function answerQuestion(q){if(!lastResult)return"No completed backtest is available. Load data and run a simulation first.";const r=lastResult,t=r.trades;const wins=t.filter(x=>x.pnl>0),loss=t.filter(x=>x.pnl<0),largest=[...t].sort((a,b)=>Math.abs(b.pnl)-Math.abs(a.pnl)).slice(0,3),topShare=t.length?largest.reduce((s,x)=>s+Math.max(0,x.pnl),0)/Math.max(1,wins.reduce((s,x)=>s+x.pnl,0)):0;let a="BACKTEST EVIDENCE · "+r.strategy+" / "+r.ticker+"\n";if(/drawdown|risk|downside/i.test(q)){a+="Maximum drawdown: "+fmt(r.maxDD*100)+"%. Annualised volatility: "+fmt(r.vol*100)+"%. Sortino: "+fmt(r.sortino)+". The drawdown metric records the worst peak-to-trough decline in the marked-to-market equity curve; it does not identify a causal news event. Inspect the drawdown chart and the trade dates around the trough.\n";}else if(/few trades|concentration|dependent/i.test(q)){a+="Closed trades: "+r.nTrades+". Profitable trades: "+wins.length+". The top three trades by absolute P&L account for "+fmt(topShare*100)+"% of gross winning P&L (a rough concentration diagnostic). "+(topShare>.6?"This is a meaningful concentration warning.":"This measure does not indicate extreme concentration by itself.")+" Check the trade ledger and test across other regimes.\n"}else if(/weakness|limitation|weak/i.test(q)){a+="Potential weaknesses: the backtest covers one ticker and historical period; a single parameter set can be overfit; Yahoo/Stooq corporate-action adjustments may differ; execution at next open with fixed costs is simplified; market impact, liquidity, taxes and survivorship effects may be omitted. Test more assets, regimes and walk-forward windows before drawing conclusions.\n"}else{a+="Net total return: "+fmt(r.totalReturn*100)+"%; CAGR: "+fmt(r.cagr*100)+"%; buy-and-hold: "+fmt(r.buyHold*100)+"%; Sharpe: "+fmt(r.sharpe)+"; max drawdown: "+fmt(r.maxDD*100)+"%; win rate: "+fmt(r.winRate*100)+"%; profit factor: "+fmt(r.profitFactor)+"; trades: "+r.nTrades+". "+(r.totalReturn>r.buyHold?"The strategy outperformed buy-and-hold over this sample, after the configured costs.":"The strategy did not outperform buy-and-hold over this sample, after the configured costs.")+" This is a historical observation, not a forward return estimate.\n"}a+="\nInterpretation: historical backtest metrics describe this sample under stated assumptions. They do not establish the probability or magnitude of future returns. Out-of-sample and walk-forward tests, alternative cost assumptions and independent validation are required.";return a}
 function ask(){const q=$("assistantQuestion").value.trim();if(!q)return;$("assistantAnswer").textContent=answerQuestion(q);$("assistantQuestion").value=""}
