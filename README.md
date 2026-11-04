@@ -84,6 +84,12 @@ crossesBelow(close, EMA(p1)) || RSI(p2) > 80
 
 The parser accepts market fields, indicator functions, arithmetic, comparisons, AND/OR/NOT, parentheses, and helpers including `crossesAbove`, `crossesBelow`, `rising`, `falling`, `lag`, `prev`, `change`, `pctChange`, `barssince`, `valuewhen`, `highest`, `lowest`, `sum`, `avg`, `stdev`, `variance`, `zscore`, `correlation`, `beta`, `slope`, `linreg`, `between`, `min`, `max`, `abs`, `sqrt`, `log`, `exp`, `pow`, `round`, `floor`, `ceil`, `if` and `nz`. Formulas are parsed into a restricted expression tree; they are not executed as arbitrary JavaScript. Reusable variables `p1` through `p6` can be assigned current values and min/max/step ranges. Date/time helpers (`hour`, `minute`, `time`, `dayofweek`, `dayofmonth`, `month`, `year`, `session`) accept an optional UTC offset in minutes, so intraday rules can use the exchange's local clock.
 
+### Cross-symbol robustness tests
+
+The Strategy Lab can run the currently selected built-in or saved custom strategy separately across up to 10 NSE symbols. It reports each symbol's return, CAGR, Sharpe, drawdown, win rate, trade count and final equity, and can export the result table as CSV. Symbols without usable Yahoo Finance history are listed with an error instead of silently disappearing.
+
+This is a **robustness comparison**, not a multi-asset portfolio backtest: every symbol is tested independently from the configured starting capital. Yahoo batch tests do not include custom CSV-only feature columns; formulas depending on those columns are blocked from this test to avoid misleading zero-signal results.
+
 ### Parameter sweeps
 
 Save a formula strategy, load historical data, and run a bounded parameter sweep across the configured ranges for `p1` through `p6`. Each sweep is capped at 120 combinations and can rank results by Sharpe, total return, Sortino or drawdown. The best in-sample combination can be applied to the saved strategy.
