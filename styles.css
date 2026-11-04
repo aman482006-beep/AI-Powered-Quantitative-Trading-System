@@ -51,15 +51,15 @@
 .ticker-wrap{position:relative}
 .ticker-wrap input[role=combobox]{padding-right:36px}
 .ticker-wrap:after{content:"⌄";position:absolute;right:13px;top:15px;color:#8ea0b5;pointer-events:none;font-size:15px}
-.ticker-autocomplete{position:absolute;z-index:30;top:calc(100% + 5px);left:0;right:0;max-height:340px;overflow:auto;background:#0c1520;border:1px solid #42536a;border-radius:8px;box-shadow:0 18px 42px #0009;padding:5px}
+.ticker-autocomplete{position:absolute;z-index:30;top:calc(100% + 5px);left:0;right:0;max-height:min(420px,60vh);overflow:auto;background:#fff;border:1px solid #dce7dd;border-radius:10px;box-shadow:0 16px 36px #203b241c;padding:6px}
 .ticker-autocomplete[hidden]{display:none}
-.ticker-option{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;border:0;border-radius:5px;padding:10px;background:transparent;color:var(--text);cursor:pointer}
-.ticker-option:hover,.ticker-option.active{background:#1b2a39}
-.ticker-option-name{font:600 11px var(--font);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ticker-option{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;border:0;border-radius:6px;padding:10px;background:transparent;color:#24382c;cursor:pointer}
+.ticker-option:hover,.ticker-option.active{background:#edf5ee}.ticker-option.active{outline:1px solid #c7ddca}
+.ticker-option-name{font:600 12px var(--font);color:#24382c;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ticker-option-meta{display:flex;align-items:flex-end;flex-direction:column;gap:3px;flex:0 0 auto}
-.ticker-option-meta b{font:10px var(--mono);color:var(--green)}
-.ticker-option-meta small{font:8px var(--mono);color:#8494a8}
-.ticker-no-match{padding:15px;color:#ffb1a7;font-size:10px;line-height:1.6}
+.ticker-option-meta b{font:10px var(--mono);color:#2d7651}
+.ticker-option-meta small{font:9px var(--mono);color:#718076}
+.ticker-no-match{padding:15px;color:#a24e4e;font-size:10px;line-height:1.6}
 .ticker-selection-hint{font:9px var(--mono);color:#718197;margin-top:6px;letter-spacing:0}
 .ticker-selection-hint.selected{color:var(--green)}
 /* Backtest progress: actual simulation bars are processed before the final report is revealed. */
@@ -464,3 +464,12 @@ footer{border-color:#e1e8e1;color:#829087}
 @media(max-width:1100px){.parameter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.custom-series-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.custom-builder{padding:15px}.parameter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.formula-snippet-bar{align-items:flex-start}.formula-snippet-bar>span{width:100%}.custom-series-grid{grid-template-columns:1fr}.optimizer-table{min-width:850px}}
 @media(max-width:420px){.parameter-grid{grid-template-columns:1fr}.formula-snippet-bar button{font-size:9px;padding:7px 8px}.builder-heading h3{font-size:18px}}
+
+
+/* Ticker picker: match the light QuantLab theme and keep every loaded NSE result reachable. */
+.ticker-menu-head{position:sticky;top:-6px;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;background:#fff;border-bottom:1px solid #e7eee7}
+.ticker-menu-head b{color:#2c6847;font:600 10px var(--mono)}
+.ticker-menu-head span{color:#7a887e;font:9px var(--mono);text-align:right}
+.ticker-browse-all{display:block;width:100%;margin-top:5px;padding:10px;border:0;border-top:1px solid #e7eee7;background:#f8fbf8;color:#2d7651;font:600 10px var(--font);cursor:pointer;text-align:center}
+.ticker-browse-all:hover{background:#edf5ee}
+@media(max-width:420px){.ticker-menu-head{align-items:flex-start;flex-direction:column;gap:4px}.ticker-menu-head span{text-align:left}}
