@@ -55,6 +55,19 @@ streamlit run streamlit_app.py
 
 Optional LLM configuration: copy `.env.example` to `.env` and set `GEMINI_API_KEY`. Keep `.env` private; never put API keys in the GitHub Pages JavaScript bundle.
 
+## Custom strategy builder
+
+In **Strategy Lab → Custom strategy builder**, create your own long-only rules without writing code:
+
+- Build separate entry and exit conditions using Close, Open, High, Low, Volume, SMA, EMA and RSI.
+- Compare a field or indicator with a numeric threshold or another field/indicator.
+- Choose crosses above/below, greater than, less than, greater/equal or less/equal.
+- Combine conditions with **ALL (AND)** or **ANY (OR)** logic for entry and exit independently.
+- Save, reload, edit and delete named strategies. Saved strategies are kept in this browser's local storage; they are not synced to another browser or device.
+- Choose the saved strategy in the terminal and run the same historical backtest used by the built-in strategies, including position sizing, costs, slippage, stops/targets, metrics, charts and trade exports.
+
+SMA, EMA and RSI custom indicators are calculated from closing prices. Custom conditions are evaluated on completed bars; the simulator uses the next bar open for signal execution. The browser engine remains long-only and does not place live orders.
+
 ## Backtesting conventions
 
 - Signals are computed from completed OHLCV bars.
