@@ -68,7 +68,17 @@
     </div>
   </div>
   <div id="formulaBuilderMode" hidden>
-    <div class="formula-intro"><b>Write the condition in plain math-like syntax.</b><span>Use price fields, indicator functions, reusable parameters, comparisons and AND / OR. This is a safe expression language, not JavaScript.</span></div>
+    <div class="formula-intro"><b>Write the condition in plain math-like syntax.</b><span>Use price fields, indicator functions, reusable parameters, comparisons and AND / OR. This is a safe expression language, not JavaScript.</span></div><div class="strategy-presets">
+      <div><b>Start with a template</b><span>Load an example, then edit it. These are starting hypotheses, not recommendations.</span></div>
+      <div class="preset-buttons">
+        <button type="button" data-preset="trend">Trend following</button>
+        <button type="button" data-preset="rsi">RSI bounce</button>
+        <button type="button" data-preset="breakout">Donchian breakout</button>
+        <button type="button" data-preset="bollinger">Bollinger reversion</button>
+        <button type="button" data-preset="macd">MACD crossover</button>
+        <button type="button" data-preset="longshort">MACD long / short</button>
+      </div>
+    </div>
     <div class="formula-grid">
       <label>LONG ENTRY<textarea id="entryFormula" spellcheck="false" rows="3">close > SMA(20) && RSI(14) > 50</textarea></label>
       <label>LONG EXIT<textarea id="exitFormula" spellcheck="false" rows="3">close < EMA(20) || RSI(14) > 75</textarea></label>
