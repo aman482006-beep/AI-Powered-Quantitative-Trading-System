@@ -111,31 +111,76 @@ function fieldSeries(data,field,params={},cache=new Map()){
 }
 
 function calcSignals(data,type,par){const c=data.map(x=>x.close),n=c.length,entry=Array(n).fill(false),exit=Array(n).fill(false),ind={};if(type==="sma"||type==="ema"){const fn=type==="sma"?sma:ema;ind.fast=fn(c,par.fast);ind.slow=fn(c,par.slow);for(let i=1;i<n;i++){if(ind.fast[i]!=null&&ind.slow[i]!=null&&ind.fast[i-1]!=null&&ind.slow[i-1]!=null){entry[i]=ind.fast[i]>ind.slow[i]&&ind.fast[i-1]<=ind.slow[i-1];exit[i]=ind.fast[i]<ind.slow[i]&&ind.fast[i-1]>=ind.slow[i-1]}}}else if(type==="rsi"){ind.rsi=rsi(c,par.period);for(let i=1;i<n;i++){entry[i]=ind.rsi[i]>par.oversold&&ind.rsi[i-1]<=par.oversold;exit[i]=ind.rsi[i]<par.overbought&&ind.rsi[i-1]>=par.overbought}}else if(type==="macd"){ind.macd=ema(c,par.fast).map((v,i)=>v==null||ema(c,par.slow)[i]==null?null:v-ema(c,par.slow)[i]);const valid=ind.macd.map(x=>x??0),first=valid.findIndex((_,i)=>i>=par.slow-1);ind.signal=ema(valid,par.signal);for(let i=1;i<n;i++){entry[i]=ind.macd[i]!=null&&ind.signal[i]!=null&&ind.macd[i]>ind.signal[i]&&ind.macd[i-1]<=ind.signal[i-1];exit[i]=ind.macd[i]!=null&&ind.signal[i]!=null&&ind.macd[i]<ind.signal[i]&&ind.macd[i-1]>=ind.signal[i-1]}}else if(type==="bb"){ind.middle=sma(c,par.period);ind.sd=c.map((_,i)=>i+1<par.period?null:Math.sqrt(c.slice(i-par.period+1,i+1).reduce((s,x)=>s+(x-ind.middle[i])**2,0)/par.period));ind.lower=ind.middle.map((x,i)=>x==null?null:x-par.std*ind.sd[i]);for(let i=1;i<n;i++){entry[i]=ind.lower[i]!=null&&c[i]>ind.lower[i]&&c[i-1]<=ind.lower[i-1];exit[i]=ind.middle[i]!=null&&c[i]>=ind.middle[i]&&c[i-1]<ind.middle[i-1]}}else if(type==="momentum"){ind.high=Array(n).fill(null);ind.ma=sma(c,par.period);for(let i=par.period;i<n;i++){ind.high[i]=Math.max(...data.slice(i-par.period,i).map(x=>x.high));entry[i]=c[i]>ind.high[i]&&c[i-1]<=ind.high[i];exit[i]=ind.ma[i]!=null&&c[i]<ind.ma[i]}}return{entry,exit,ind}}
-function calcCustomSignals(data,strategy){
- const n=data.length,entry=Array(n).fill(false),exit=Array(n).fill(false),cache=new Map();
- function values(spec){
-  if(spec.mode==="value")return Number(spec.value);
-  const field=spec.field,period=Math.max(2,Math.min(500,Math.floor(Number(spec.period)||20))),key=field+(INDICATOR_FIELDS.has(field)?":"+period:"");
-  if(cache.has(key))return cache.get(key);
-  let out;
-  if(field==="close"||field==="open"||field==="high"||field==="low"||field==="volume")out=data.map(b=>Number(b[field]));
-  else{const closes=data.map(b=>b.close);if(field==="sma")out=sma(closes,period);else if(field==="ema")out=ema(closes,period);else if(field==="rsi")out=period>=n?Array(n).fill(null):rsi(closes,period);else out=Array(n).fill(null)}
-  cache.set(key,out);return out
+function tokenizeFormula(source){
+ const tokens=[];let i=0;const operators=["&&","||",">=","<=","==","!=","**","+","-","*","/","%"," >",">","<","!","(",")",","];
+ while(i<source.length){if(/\s/.test(source[i])){i++;continue}
+  const rest=source.slice(i),number=rest.match(/^(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/i),identifier=rest.match(/^[A-Za-z_][A-Za-z0-9_]*/);
+  if(number){tokens.push({type:"number",value:Number(number[0])});i+=number[0].length;continue}
+  if(identifier){tokens.push({type:"identifier",value:identifier[0].toLowerCase()});i+=identifier[0].length;continue}
+  const op=["&&","||",">=","<=","==","!=","**","+","-","*","/","%",">","<","!","(",")",","].find(x=>rest.startsWith(x));
+  if(op){tokens.push({type:"operator",value:op});i+=op.length;continue}
+  throw Error("Unsupported character in formula near: "+rest.slice(0,12))
  }
- function compile(rules){return rules.map(rule=>({rule,left:values(rule.left),right:values(rule.right)}))}
- const entryRules=compile(strategy.entry),exitRules=compile(strategy.exit);
- function test(item,i){const {rule,left,right}=item,a=Array.isArray(left)?left[i]:left,b=Array.isArray(right)?right[i]:right;if(!Number.isFinite(a)||!Number.isFinite(b))return false;switch(rule.operator){
-  case"crosses_above":{if(i<1)return false;const pa=left[i-1],pb=Array.isArray(right)?right[i-1]:right;return Number.isFinite(pa)&&Number.isFinite(pb)&&pa<=pb&&a>b}
-  case"crosses_below":{if(i<1)return false;const pa=left[i-1],pb=Array.isArray(right)?right[i-1]:right;return Number.isFinite(pa)&&Number.isFinite(pb)&&pa>=pb&&a<b}
-  case"greater_than":return a>b;
-  case"less_than":return a<b;
-  case"greater_equal":return a>=b;
-  case"less_equal":return a<=b;
-  default:return false
- }}
- function group(rules,logic,i){if(!rules.length)return false;return logic==="any"?rules.some(r=>test(r,i)):rules.every(r=>test(r,i))}
- for(let i=1;i<n;i++){entry[i]=group(entryRules,strategy.entryLogic,i);exit[i]=group(exitRules,strategy.exitLogic,i)}
- return{entry,exit,ind:{}}
+ tokens.push({type:"eof",value:""});if(tokens.length>500)throw Error("Formula is too long.");return tokens
+}
+function parseFormula(source){
+ if(!String(source||"").trim())throw Error("Formula cannot be empty.");
+ const tokens=tokenizeFormula(String(source)),precedence={"||":1,"&&":2,"==":3,"!=":3,">":3,"<":3,">=":3,"<=":3,"+":4,"-":4,"*":5,"/":5,"%":5,"**":6};let pos=0;
+ const peek=()=>tokens[pos],take=()=>tokens[pos++],expect=v=>{if(peek().value!==v)throw Error("Expected '"+v+"' in formula.");take()};
+ function primary(){
+  const t=take();if(t.type==="number")return{type:"number",value:t.value};
+  if(t.value==="!"||t.value==="-"||t.value==="+")return{type:"unary",op:t.value,arg:expression(6)};
+  if(t.value==="("){const x=expression(0);expect(")");return x}
+  if(t.type==="identifier"){if(peek().value==="("){take();const args=[];if(peek().value!==")"){while(true){args.push(expression(0));if(peek().value!==",")break;take()}}expect(")");return{type:"call",name:t.value,args}}return{type:"variable",name:t.value}}
+  throw Error("Unexpected '"+t.value+"' in formula.")
+ }
+ function expression(min){
+  let left=primary();
+  while(peek().type==="operator"&&precedence[peek().value]>=min){const op=take().value,level=precedence[op],right=expression(level+(op==="**"?0:1));left={type:"binary",op,left,right}}
+  return left
+ }
+ const ast=expression(0);if(peek().type!=="eof")throw Error("Unexpected '"+peek().value+"' at the end of formula.");return ast
+}
+const FORMULA_INDICATORS={sma:"sma",ema:"ema",wma:"wma",vwma:"vwma",rsi:"rsi",atr:"atr",adx:"adx",cci:"cci",roc:"roc",obv:"obv",vwap:"vwap",macd:"macd",macd_signal:"macd_signal",macd_hist:"macd_hist",bb_upper:"bb_upper",bb_middle:"bb_middle",bb_lower:"bb_lower",stoch_k:"stoch_k",stoch_d:"stoch_d",donchian_high:"donchian_high",donchian_low:"donchian_low",volume_sma:"volume_sma"};
+function evaluateFormula(ast,data,index,cache=new Map()){
+ const n=data.length,bar=data[index];if(!bar)return NaN;
+ const numeric=x=>typeof x==="boolean"?(x?1:0):Number(x);
+ function ev(node,at=index){
+  if(at<0||at>=n)return NaN;
+  if(node.type==="number")return node.value;
+  if(node.type==="variable"){const name=node.name,b=data[at];if(["open","high","low","close","volume"].includes(name))return Number(b[name]);if(name==="hl2")return(b.high+b.low)/2;if(name==="hlc3")return(b.high+b.low+b.close)/3;if(name==="ohlc4")return(b.open+b.high+b.low+b.close)/4;if(name==="true")return 1;if(name==="false")return 0;throw Error("Unknown field '"+name+"'.")}
+  if(node.type==="unary"){const v=ev(node.arg,at);return node.op==="!"?!v:node.op==="-"?-numeric(v):numeric(v)}
+  if(node.type==="binary"){
+   if(node.op==="&&"){const a=ev(node.left,at);return!!a&&!!ev(node.right,at)}
+   if(node.op==="||"){const a=ev(node.left,at);return!!a||!!ev(node.right,at)}
+   const a=numeric(ev(node.left,at)),b=numeric(ev(node.right,at));
+   switch(node.op){case"+":return a+b;case"-":return a-b;case"*":return a*b;case"/":return b===0?NaN:a/b;case"%":return b===0?NaN:a%b;case"**":return a**b;case">":return a>b;case"<":return a<b;case">=":return a>=b;case"<=":return a<=b;case"==":return a===b;case"!=":return a!==b;default:throw Error("Unsupported operator "+node.op)}
+  }
+  if(node.type==="call"){
+   const name=node.name,args=node.args;
+   if(name==="crossesabove"||name==="crossover"||name==="crossesbelow"||name==="crossunder"){if(at<1)return false;const a=numeric(ev(args[0],at)),b=numeric(ev(args[1],at)),pa=numeric(ev(args[0],at-1)),pb=numeric(ev(args[1],at-1));return name==="crossesabove"||name==="crossover"?pa<=pb&&a>b:pa>=pb&&a<b}
+   if(name==="rising"||name==="falling"){const period=Math.max(1,Math.min(500,Math.floor(numeric(ev(args[1],at))||1)));if(at<period)return false;const a=numeric(ev(args[0],at)),b=numeric(ev(args[0],at-period));return name==="rising"?a>b:a<b}
+   if(["highest","lowest","sum","avg"].includes(name)){const period=Math.max(1,Math.min(500,Math.floor(numeric(ev(args[1],at))||1)));if(at-period+1<0)return NaN;const values=[];for(let k=at-period+1;k<=at;k++)values.push(numeric(ev(args[0],k)));if(values.some(x=>!Number.isFinite(x)))return NaN;if(name==="highest")return Math.max(...values);if(name==="lowest")return Math.min(...values);const total=values.reduce((a,b)=>a+b,0);return name==="sum"?total:total/values.length}
+   if(FORMULA_INDICATORS[name]){const p=args.map(x=>numeric(ev(x,at)));const params={};if(name.startsWith("macd")){params.fast=p[0]||12;params.slow=p[1]||26;params.signal=p[2]||9}else if(name.startsWith("bb_")){params.period=p[0]||20;params.multiplier=p[1]||2}else if(name!=="obv"){params.period=p[0]||14}const series=fieldSeries(data,FORMULA_INDICATORS[name],params,cache);return series[at]}
+   const v=args.map(x=>numeric(ev(x,at)));switch(name){case"abs":return Math.abs(v[0]);case"min":return Math.min(...v);case"max":return Math.max(...v);case"sqrt":return Math.sqrt(v[0]);case"log":return Math.log(v[0]);case"exp":return Math.exp(v[0]);case"pow":return Math.pow(v[0],v[1]);case"round":return Math.round(v[0]);case"floor":return Math.floor(v[0]);case"ceil":return Math.ceil(v[0]);case"between":return v[0]>=v[1]&&v[0]<=v[2];case"if":return v[0]?v[1]:v[2];case"nz":return Number.isFinite(v[0])?v[0]:(v[1]??0);default:throw Error("Unknown function '"+name+"'.")}
+  }
+  throw Error("Invalid formula syntax tree.")
+ }
+ const result=ev(ast,index);return numeric(result)
+}
+function compileFormulaSignals(data,entryText,exitText){
+ const entryAst=parseFormula(entryText),exitAst=parseFormula(exitText),entry=Array(data.length).fill(false),exit=Array(data.length).fill(false),cache=new Map();
+ for(let i=1;i<data.length;i++){entry[i]=!!evaluateFormula(entryAst,data,i,cache);exit[i]=!!evaluateFormula(exitAst,data,i,cache)}
+ return{entry,exit}
+}
+function calcCustomSignals(data,strategy){
+ const n=data.length,empty=()=>Array(n).fill(false),direction=strategy.direction||"long";
+ function compileRules(rules,logic){const cache=new Map(),compiled=(rules||[]).map(rule=>({rule,left:fieldSeries(data,rule.left.field,rule.left,cache),right:rule.right.mode==="value"?Number(rule.right.value):fieldSeries(data,rule.right.field,rule.right,cache)}));function test(item,i){const{rule,left,right}=item,a=Array.isArray(left)?left[i]:left,b=Array.isArray(right)?right[i]:right;if(!Number.isFinite(a)||!Number.isFinite(b))return false;switch(rule.operator){case"crosses_above":{if(i<1)return false;const pa=left[i-1],pb=Array.isArray(right)?right[i-1]:right;return Number.isFinite(pa)&&Number.isFinite(pb)&&pa<=pb&&a>b}case"crosses_below":{if(i<1)return false;const pa=left[i-1],pb=Array.isArray(right)?right[i-1]:right;return Number.isFinite(pa)&&Number.isFinite(pb)&&pa>=pb&&a<b}case"greater_than":return a>b;case"less_than":return a<b;case"greater_equal":return a>=b;case"less_equal":return a<=b;default:return false}}const out=empty();for(let i=1;i<n;i++){if(compiled.length)out[i]=logic==="any"?compiled.some(x=>test(x,i)):compiled.every(x=>test(x,i))}return out}
+ let primaryEntry,primaryExit,shortEntry=empty(),shortExit=empty();
+ if(strategy.mode==="formula"){const primary=compileFormulaSignals(data,strategy.entryFormula,strategy.exitFormula);primaryEntry=primary.entry;primaryExit=primary.exit;if(direction==="both"){const extra=compileFormulaSignals(data,strategy.shortEntryFormula,strategy.shortExitFormula);shortEntry=extra.entry;shortExit=extra.exit}}
+ else{primaryEntry=compileRules(strategy.entry,strategy.entryLogic);primaryExit=compileRules(strategy.exit,strategy.exitLogic);if(direction==="both"){shortEntry=compileRules(strategy.shortEntry,strategy.shortEntryLogic);shortExit=compileRules(strategy.shortExit,strategy.shortExitLogic)}}
+ const longEntry=empty(),longExit=empty();if(direction==="short"){shortEntry=primaryEntry;shortExit=primaryExit}else{for(let i=0;i<n;i++){longEntry[i]=primaryEntry[i];longExit[i]=primaryExit[i]}}
+ return{longEntry,longExit,shortEntry,shortExit,ind:{}}
 }
 function paramsFromUI(){const o={};document.querySelectorAll("[data-param]").forEach(x=>o[x.dataset.param]=Number(x.value));if(o.fast&&o.slow&&o.fast>=o.slow)throw Error("Fast period must be smaller than slow period.");if(o.oversold>=o.overbought)throw Error("RSI oversold must be below overbought.");return o}
 async function runSimulation(onProgress){const cfg={capital:+$("capital").value,size:+$("positionSize").value/100,fee:+$("commission").value/100,slip:+$("slippage").value/100,sl:+$("stopLoss").value/100,tp:+$("takeProfit").value/100};if(!(cfg.capital>0)||!(cfg.size>0&&cfg.size<=1)||cfg.fee<0||cfg.slip<0)throw Error("Check capital, sizing, commission and slippage inputs.");const type=$("strategy").value,isCustom=type.startsWith("custom:"),custom=isCustom?customStrategies.find(x=>x.id===type.slice(7)):null;if(isCustom&&!custom)throw Error("Select or rebuild a saved custom strategy before running the backtest.");const par=isCustom?{}:paramsFromUI(),signals=isCustom?calcCustomSignals(bars,custom):calcSignals(bars,type,par),{entry,exit,ind}=signals;let cash=cfg.capital,pos=null,eq=[],trades=[],qty=0;const startClose=bars[0].close;let pending=null,livePeak=cfg.capital,liveMaxDD=0;const progressEvery=Math.max(1,Math.floor(bars.length/45));for(let i=0;i<bars.length;i++){const b=bars[i];if(pos){let trigger=null,price=null;if(cfg.sl&&b.low<=pos.entryPrice*(1-cfg.sl)){trigger="stop-loss";price=pos.entryPrice*(1-cfg.sl)}else if(cfg.tp&&b.high>=pos.entryPrice*(1+cfg.tp)){trigger="take-profit";price=pos.entryPrice*(1+cfg.tp)}else if(pending==="exit"&&i>pos.entryIndex){trigger="signal";price=b.open*(1-cfg.slip)}if(trigger){const gross=qty*price,fee=gross*cfg.fee;cash+=gross-fee;const pnl=(price-pos.entryPrice)*qty-pos.entryFee-fee;trades.push({entryDate:pos.date,exitDate:b.date,entry:pos.entryPrice,exit:price,qty,pnl,ret:pnl/(pos.entryPrice*qty+pos.entryFee),reason:trigger});pos=null;qty=0;pending=null}}if(!pos&&pending==="entry"&&i>0){const px=b.open*(1+cfg.slip),allocation=cash*cfg.size,units=Math.floor(allocation/(px*(1+cfg.fee))*1000000)/1000000;if(units>0){const gross=units*px,fee=gross*cfg.fee;cash-=gross+fee;pos={date:b.date,entryPrice:px,entryIndex:i,entryFee:fee};qty=units}pending=null}const marked=cash+(pos?qty*b.close:0);eq.push({date:b.date,equity:marked,close:b.close});livePeak=Math.max(livePeak,marked);liveMaxDD=Math.min(liveMaxDD,marked/livePeak-1);if(!pos&&entry[i]&&i<bars.length-1)pending="entry";else if(pos&&exit[i]&&i<bars.length-1)pending="exit";if(onProgress&&((i+1)%progressEvery===0||i===bars.length-1)){await onProgress({processed:i+1,total:bars.length,date:b.date,equity:marked,return:marked/cfg.capital-1,drawdown:liveMaxDD,trades:trades.length,tradeRows:trades.slice(),series:eq});await new Promise(resolve=>setTimeout(resolve,26))}}if(pos){const b=bars.at(-1),px=b.close*(1-cfg.slip),gross=qty*px,fee=gross*cfg.fee;cash+=gross-fee;const pnl=(px-pos.entryPrice)*qty-pos.entryFee-fee;trades.push({entryDate:pos.date,exitDate:b.date,entry:pos.entryPrice,exit:px,qty,pnl,ret:pnl/(pos.entryPrice*qty+pos.entryFee),reason:"end-of-test"});eq[eq.length-1].equity=cash;pos=null}const rets=eq.map((x,i)=>i?x.equity/eq[i-1].equity-1:0),freq=$("interval").value==="1d"?252:$("interval").value==="1wk"?52:12,mean=rets.reduce((a,b)=>a+b,0)/rets.length,sd=Math.sqrt(rets.reduce((s,x)=>s+(x-mean)**2,0)/Math.max(1,rets.length-1)),down=Math.sqrt(rets.reduce((s,x)=>s+Math.min(0,x)**2,0)/rets.length),peakArr=[];let peak=cfg.capital,mdd=0;for(const x of eq){peak=Math.max(peak,x.equity);const dd=x.equity/peak-1;peakArr.push(dd);mdd=Math.min(mdd,dd)}const final=eq.at(-1).equity,years=Math.max(1e-9,(new Date(bars.at(-1).date)-new Date(bars[0].date))/86400000/365.25),wins=trades.filter(t=>t.pnl>0),loss=trades.filter(t=>t.pnl<0),gp=wins.reduce((s,t)=>s+t.pnl,0),gl=-loss.reduce((s,t)=>s+t.pnl,0),bh=cfg.capital*bars.at(-1).close/startClose;return{ticker:lastSymbol,strategy:custom?custom.name:strategies[type].name,params:par,initial:cfg.capital,final,totalReturn:final/cfg.capital-1,cagr:(final/cfg.capital)**(1/years)-1,vol:sd*Math.sqrt(freq),sharpe:sd?mean/sd*Math.sqrt(freq):0,sortino:down?mean/down*Math.sqrt(freq):0,maxDD:mdd,winRate:trades.length?wins.length/trades.length:0,profitFactor:gl?gp/gl:gp?Infinity:0,nTrades:trades.length,avgHold:trades.length?trades.reduce((s,t)=>s+((new Date(t.exitDate)-new Date(t.entryDate))/86400000),0)/trades.length:0,avgWin:wins.length?gp/wins.length:0,avgLoss:loss.length?loss.reduce((s,t)=>s+t.pnl,0)/loss.length:0,exposure:eq.filter(x=>x.equity>cash+1e-8).length/eq.length,buyHold:bh/cfg.capital-1,eq,drawdowns:peakArr,trades,ind,freq,source:sourceMeta,start:bars[0].date,end:bars.at(-1).date,frequency:$("interval").value};}
