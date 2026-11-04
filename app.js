@@ -166,7 +166,7 @@ function tokenizeFormula(source){
   const rest=source.slice(i),number=rest.match(/^(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/i),identifier=rest.match(/^[A-Za-z_][A-Za-z0-9_]*/);
   if(number){tokens.push({type:"number",value:Number(number[0])});i+=number[0].length;continue}
   if(identifier){const word=identifier[0].toLowerCase(),logic={and:"&&",or:"||",not:"!"}[word];tokens.push(logic?{type:"operator",value:logic}:{type:"identifier",value:word});i+=identifier[0].length;continue}
-  const op=["&&","||",">=","<=","==","!=","**","+","-","*","/","%",">","<","!","(",")",","].find(x=>rest.startsWith(x));
+  const op=["&&","||",">=","<=","==","!=","**","^","+","-","*","/","%",">","<","!","(",")",","].find(x=>rest.startsWith(x));
   if(op){tokens.push({type:"operator",value:op});i+=op.length;continue}
   throw Error("Unsupported character in formula near: "+rest.slice(0,12))
  }
@@ -208,6 +208,52 @@ function evaluateFormula(ast,data,index,cache=new Map(),parameterValues={},serie
   }
   if(node.type==="call"){
    const name=node.name,args=node.args;
+   const candle=data[at],previous=data[at-1],range=candle.high-candle.low,body=Math.abs(candle.close-candle.open),upperWick=candle.high-Math.max(candle.open,candle.close),lowerWick=Math.min(candle.open,candle.close)-candle.low;
+   if(["body","candle_body"].includes(name))return body;
+   if(["range","candle_range"].includes(name))return range;
+   if(["upper_wick","upperwick"].includes(name))return upperWick;
+   if(["lower_wick","lowerwick"].includes(name))return lowerWick;
+   if(name==="true_range")return trueRange(data)[at];
+   if(name==="body_pct")return range?100*body/range:0;
+   if(name==="range_pct")return candle.close?100*range/candle.close:NaN;
+   if(name==="gap_pct")return at&&previous.close?100*(candle.open/previous.close-1):NaN;
+   if(name==="doji")return range?body/range<=numeric(args[0]?ev(args[0],at):{type:"number",value:.1}):false;
+   if(["bullish_engulfing","bearish_engulfing","bullish_harami","bearish_harami","inside_bar","outside_bar","hammer","shooting_star","marubozu","gap_up","gap_down"].includes(name)){
+    if(!previous&&["bullish_engulfing","bearish_engulfing","bullish_harami","bearish_harami","inside_bar","outside_bar","gap_up","gap_down"].includes(name))return false;
+    const bullish=candle.close>candle.open,bearish=candle.close<candle.open,prevBull=previous&&previous.close>previous.open,prevBear=previous&&previous.close<previous.open;
+    if(name==="bullish_engulfing")return !!prevBear&&bullish&&candle.open<=previous.close&&candle.close>=previous.open;
+    if(name==="bearish_engulfing")return !!prevBull&&bearish&&candle.open>=previous.close&&candle.close<=previous.open;
+    if(name==="bullish_harami")return !!prevBear&&bullish&&candle.open>=previous.close&&candle.close<=previous.open;
+    if(name==="bearish_harami")return !!prevBull&&bearish&&candle.open<=previous.close&&candle.close>=previous.open;
+    if(name==="inside_bar")return candle.high<previous.high&&candle.low>previous.low;
+    if(name==="outside_bar")return candle.high>previous.high&&candle.low<previous.low;
+    if(name==="hammer")return range>0&&lowerWick>=body*2&&upperWick<=Math.max(body*.5,range*.08);
+    if(name==="shooting_star")return range>0&&upperWick>=body*2&&lowerWick<=Math.max(body*.5,range*.08);
+    if(name==="marubozu"){const tolerance=Math.max(0,numeric(args[0]?ev(args[0],at):{type:"number",value:5}))/100;return range>0&&upperWick/range<=tolerance&&lowerWick/range<=tolerance}
+    if(name==="gap_up")return previous.close>0&&(candle.open/previous.close-1)*100>=numeric(args[0]?ev(args[0],at):{type:"number",value:0});
+    if(name==="gap_down")return previous.close>0&&(candle.open/previous.close-1)*100<=-numeric(args[0]?ev(args[0],at):{type:"number",value:0});
+   }
+   if(["count","all","any","median","mad","percentile","percentrank","highestbars","lowestbars"].includes(name)){
+    const period=Math.max(1,Math.min(500,Math.floor(numeric(ev(args[1],at))||1)));if(at-period+1<0)return NaN;
+    const values=[];for(let k=at-period+1;k<=at;k++)values.push(numeric(ev(args[0],k)));
+    if(name==="count")return values.filter(x=>Number.isFinite(x)&&x!==0).length;
+    if(name==="all")return values.every(x=>Number.isFinite(x)&&x!==0);
+    if(name==="any")return values.some(x=>Number.isFinite(x)&&x!==0);
+    if(values.some(x=>!Number.isFinite(x)))return NaN;
+    if(name==="highestbars"||name==="lowestbars"){const target=name==="highestbars"?Math.max(...values):Math.min(...values);return values.length-1-values.lastIndexOf(target)}
+    const sorted=[...values].sort((a,b)=>a-b),median=sorted.length%2?sorted[(sorted.length-1)/2]:(sorted[sorted.length/2-1]+sorted[sorted.length/2])/2;
+    if(name==="median")return median;
+    if(name==="mad"){const deviations=values.map(x=>Math.abs(x-median)).sort((a,b)=>a-b);return deviations.length%2?deviations[(deviations.length-1)/2]:(deviations[deviations.length/2-1]+deviations[deviations.length/2])/2}
+    if(name==="percentrank"){const current=values.at(-1);return 100*values.filter(x=>x<=current).length/values.length}
+    const pct=Math.max(0,Math.min(100,numeric(ev(args[2],at))));const rank=(pct/100)*(sorted.length-1),lo=Math.floor(rank),hi=Math.ceil(rank);return sorted[lo]+(sorted[hi]-sorted[lo])*(rank-lo)
+   }
+   if(HTF_INDICATORS[name]||["htf_macd","htf_macd_signal","htf_macd_hist"].includes(name)){
+    const p=args.map(x=>numeric(ev(x,at))),field=HTF_INDICATORS[name]||(name==="htf_macd"?"macd":name==="htf_macd_signal"?"macd_signal":"macd_hist"),params={};
+    if(name.startsWith("htf_macd")){params.fast=p[0]||12;params.slow=p[1]||26;params.signal=p[2]||9}
+    else if(name==="htf_supertrend")params.multiplier=p[1]||3;
+    const factor=Math.max(2,Math.min(250,Math.floor(p.at(-1)||5))),period=name.startsWith("htf_macd")?params.slow:p[0]||14;
+    const values=higherTimeframeSeries(data,field,period,factor,params,cache);return values[at]
+   }
    if(name==="crossesabove"||name==="crossover"||name==="crossesbelow"||name==="crossunder"){if(at<1)return false;const a=numeric(ev(args[0],at)),b=numeric(ev(args[1],at)),pa=numeric(ev(args[0],at-1)),pb=numeric(ev(args[1],at-1));return name==="crossesabove"||name==="crossover"?pa<=pb&&a>b:pa>=pb&&a<b}
    if(name==="rising"||name==="falling"){const period=Math.max(1,Math.min(500,Math.floor(numeric(ev(args[1],at))||1)));if(at<period)return false;const a=numeric(ev(args[0],at)),b=numeric(ev(args[0],at-period));return name==="rising"?a>b:a<b}
    if(["lag","prev","change","pctchange"].includes(name)){const period=Math.max(1,Math.min(500,Math.floor(numeric(ev(args[1],at))||1)));if(at<period)return NaN;const current=numeric(ev(args[0],at)),previous=numeric(ev(args[0],at-period));if(name==="lag"||name==="prev")return previous;if(name==="change")return current-previous;return previous===0?NaN:(current/previous-1)*100}
@@ -232,7 +278,7 @@ function evaluateFormula(ast,data,index,cache=new Map(),parameterValues={},serie
      return result[at]
     }
     const p=args.map(x=>numeric(ev(x,at))),params={};if(name.startsWith("macd")){params.fast=p[0]||12;params.slow=p[1]||26;params.signal=p[2]||9}else if(name==="chaikin_osc"){params.fast=p[0]||3;params.slow=p[1]||10}else if(name.startsWith("bb_")||name.startsWith("keltner_")){params.period=p[0]||20;params.multiplier=p[1]||2}else if(name!=="obv"){params.period=p[0]||14}const series=fieldSeries(data,FORMULA_INDICATORS[name],params,cache);return series[at]}
-   const v=args.map(x=>numeric(ev(x,at)));switch(name){case"abs":return Math.abs(v[0]);case"min":return Math.min(...v);case"max":return Math.max(...v);case"sqrt":return Math.sqrt(v[0]);case"log":return Math.log(v[0]);case"exp":return Math.exp(v[0]);case"pow":return Math.pow(v[0],v[1]);case"round":return Math.round(v[0]);case"floor":return Math.floor(v[0]);case"ceil":return Math.ceil(v[0]);case"between":return v[0]>=v[1]&&v[0]<=v[2];case"if":return v[0]?v[1]:v[2];case"nz":return Number.isFinite(v[0])?v[0]:(v[1]??0);default:throw Error("Unknown function '"+name+"'.")}
+   const v=args.map(x=>numeric(ev(x,at)));switch(name){case"abs":return Math.abs(v[0]);case"min":return Math.min(...v);case"max":return Math.max(...v);case"sqrt":return Math.sqrt(v[0]);case"log":case"ln":return Math.log(v[0]);case"log10":return Math.log10(v[0]);case"exp":return Math.exp(v[0]);case"pow":return Math.pow(v[0],v[1]);case"round":return Math.round(v[0]);case"floor":return Math.floor(v[0]);case"ceil":return Math.ceil(v[0]);case"sign":return Math.sign(v[0]);case"clamp":return Math.max(v[1],Math.min(v[2],v[0]));case"sin":return Math.sin(v[0]);case"cos":return Math.cos(v[0]);case"tan":return Math.tan(v[0]);case"atan":return Math.atan(v[0]);case"tanh":return Math.tanh(v[0]);case"isfinite":return Number.isFinite(v[0]);case"isnan":return Number.isNaN(v[0]);case"between":return v[0]>=v[1]&&v[0]<=v[2];case"if":return v[0]?v[1]:v[2];case"nz":return Number.isFinite(v[0])?v[0]:(v[1]??0);default:throw Error("Unknown function '"+name+"'.")}
   }
   throw Error("Invalid formula syntax tree.")
  }
