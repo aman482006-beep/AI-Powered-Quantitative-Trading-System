@@ -95,7 +95,7 @@ Named strategies can be loaded, duplicated, edited and deleted. They are saved i
 ## Backtesting conventions
 
 - Signals use completed historical bars; market-entry and signal-exit orders execute at the **next bar open**.
-- The browser engine supports one open position in one selected instrument at a time. A long/short strategy can reverse when the opposite-side entry signal appears. It does not pyramid or hold several symbols simultaneously.
+- The browser engine supports one net position in one selected instrument at a time. Optional pyramiding can scale that position in up to 10 entry legs (default: one); entry quantity and fees are blended into one position cost basis. A long/short strategy can reverse when the opposite-side entry signal appears. It does not run multiple symbols or independent simultaneous positions.
 - Position sizing supports percent of equity, fixed INR allocation, or risk-based sizing. Risk-based sizing requires a stop-loss percentage and caps notional exposure at current equity; leverage is not used.
 - Long and short positions are marked to market with signed quantities. Short-sale proceeds are credited to cash and the short liability is marked against current price. The simulator does not assume that a security is always available to borrow.
 - Commission and slippage settings are applied to market entries and market exits. Stop-loss, trailing-stop and take-profit triggers are checked against subsequent OHLC bars; stop-loss is assumed first if both stop and target are touched in one bar. Stop-market fills use the bar open when price gaps through the stop, otherwise the stop level, then apply configured slippage. Take-profit triggers use the limit level. Trailing stops use the best price observed on prior completed bars.
