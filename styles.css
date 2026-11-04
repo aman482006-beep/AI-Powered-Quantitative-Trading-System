@@ -314,3 +314,10 @@ footer{border-color:#e1e8e1;color:#829087}
 #runParameterSweep:disabled{opacity:.55;cursor:wait}
 #sizingMethod{min-width:0}
 @media(max-width:760px){.parameter-grid{grid-template-columns:1fr}.optimizer-heading{align-items:stretch;flex-direction:column}.optimizer-controls{align-items:stretch;flex-direction:column}.optimizer-controls label{width:100%}.optimizer-controls .button{width:100%}.formula-parameter-panel,.optimizer-panel{padding:12px}}
+
+.strategy-presets{margin:13px 0;padding:14px;background:#f7faf6;border:1px solid #e2eae2;border-radius:9px}
+.strategy-presets>div:first-child b{display:block;color:#2d4235;font-size:11px}
+.strategy-presets>div:first-child span{display:block;margin-top:4px;color:#78857c;font-size:10px;line-height:1.5}
+.preset-buttons{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+.preset-buttons button{border:1px solid #d9e5da;background:#fff;color:#3e694b;border-radius:18px;padding:7px 10px;font:600 10px var(--font);cursor:pointer;transition:background .15s,border-color .15s,transform .15s}
+.preset-buttons button:hover{background:#edf5ee;border-color:#a9c8af;transform:translateY(-1px)}
