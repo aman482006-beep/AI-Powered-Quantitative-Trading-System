@@ -57,26 +57,51 @@ Optional LLM configuration: copy `.env.example` to `.env` and set `GEMINI_API_KE
 
 ## Custom strategy builder
 
-In **Strategy Lab → Custom strategy builder**, create your own long-only rules without writing code:
+The GitHub Pages app includes a no-code visual builder and a safe formula editor.
 
-- Build separate entry and exit conditions using Close, Open, High, Low, Volume, SMA, EMA and RSI.
-- Compare a field or indicator with a numeric threshold or another field/indicator.
-- Choose crosses above/below, greater than, less than, greater/equal or less/equal.
-- Combine conditions with **ALL (AND)** or **ANY (OR)** logic for entry and exit independently.
-- Save, reload, edit and delete named strategies. Saved strategies are kept in this browser's local storage; they are not synced to another browser or device.
-- Choose the saved strategy in the terminal and run the same historical backtest used by the built-in strategies, including position sizing, costs, slippage, stops/targets, metrics, charts and trade exports.
+### Visual builder
 
-SMA, EMA and RSI custom indicators are calculated from closing prices. Custom conditions are evaluated on completed bars; the simulator uses the next bar open for signal execution. The browser engine remains long-only and does not place live orders.
+Create separate long-entry, long-exit, short-entry and short-cover rules. Each group supports ALL (AND) or ANY (OR) logic. Compare OHLCV fields or derived indicators against numeric thresholds or other fields/indicators.
+
+Supported visual fields and indicators:
+- Price and volume: Open, High, Low, Close, Volume, HL2, HLC3, OHLC4.
+- Trend and volume-weighted: SMA, EMA, WMA, VWMA, rolling VWAP, volume SMA.
+- Momentum and volatility: RSI, MACD line/signal/histogram, ATR, ADX, CCI, ROC.
+- Bands and range: Bollinger upper/middle/lower, Stochastic %K/%D, Donchian high/low, OBV.
+
+Comparisons include crosses above/below, greater than, less than, greater/equal and less/equal. Indicator parameters (periods, MACD fast/slow/signal and Bollinger multiplier) are editable per rule.
+
+### Formula editor
+
+For more involved strategies, use expressions such as:
+
+```text
+close > SMA(p1) && RSI(p2) > p3 && ADX(14) > 20
+crossesBelow(close, EMA(p1)) || RSI(p2) > 80
+```
+
+The parser accepts market fields, indicator functions, arithmetic, comparisons, AND/OR/NOT, parentheses, and helpers including `crossesAbove`, `crossesBelow`, `rising`, `falling`, `highest`, `lowest`, `sum`, `avg`, `between`, `min`, `max`, `abs`, `sqrt`, `log` and `pow`. Formulas are parsed into a restricted expression tree; they are not executed as arbitrary JavaScript. Reusable variables `p1`, `p2` and `p3` can be assigned current values and min/max/step ranges.
+
+### Parameter sweeps
+
+Save a formula strategy, load historical data, and run a bounded parameter sweep across the configured ranges for `p1`, `p2` and `p3`. Each sweep is capped at 120 combinations and can rank results by Sharpe, total return, Sortino or drawdown. The best in-sample combination can be applied to the saved strategy.
+
+A sweep is exploratory, not a forecast. Selecting the best combination on the same history used to report performance creates data-mining and overfitting risk. Use a separate chronological holdout or walk-forward test before drawing conclusions.
+
+### Saving and portability
+
+Named strategies can be loaded, duplicated, edited and deleted. They are saved in the current browser's local storage. Use **Export strategy JSON** to back them up or move them to another browser/device; use **Import JSON** to restore them.
 
 ## Backtesting conventions
 
-- Signals are computed from completed OHLCV bars.
-- Market orders are filled at the **next bar open**, with configured slippage and commission.
-- Stop-loss and take-profit checks use the subsequent bar's high/low. When both are touched in a single candle, stop-loss is assumed first (conservative convention).
-- A final open position is liquidated at the last close with slippage/commission.
-- Equity is marked to market on every bar. No leverage or short positions are used in the current browser engine.
-- Annualisation factors: 252 daily, 52 weekly, 12 monthly. Risk-free rate is assumed to be 0 for Sharpe and Sortino.
-- CAGR uses elapsed calendar years. Profit factor is gross winning trade P&L / absolute gross losing trade P&L.
+- Signals use completed historical bars; market-entry and signal-exit orders execute at the **next bar open**.
+- The browser engine supports one open position in one selected instrument at a time. A long/short strategy can reverse when the opposite-side entry signal appears. It does not pyramid or hold several symbols simultaneously.
+- Position sizing supports percent of equity, fixed INR allocation, or risk-based sizing. Risk-based sizing requires a stop-loss percentage and caps notional exposure at current equity; leverage is not used.
+- Long and short positions are marked to market with signed quantities. Short-sale proceeds are credited to cash and the short liability is marked against current price. The simulator does not assume that a security is always available to borrow.
+- Commission and slippage settings are applied to market entries and exits. Stop-loss, trailing-stop and take-profit triggers are checked against subsequent OHLC bars; stop-loss is assumed first if both stop and target are touched in one bar. Trailing stops use the best price observed on prior completed bars.
+- A maximum holding-bar limit can close positions at the next bar open. Any open position at the end of the test is liquidated at the final close with configured slippage/commission.
+- Sharpe and Sortino use the configurable annual risk-free rate converted to a per-bar rate. Annualisation factors are 252 daily, 52 weekly and 12 monthly. CAGR uses elapsed calendar years.
+- The buy-and-hold line is a long benchmark, even when testing a short-only strategy; compare it as market context rather than a like-for-like short benchmark.
 
 ## Strategies
 
@@ -100,6 +125,6 @@ pytest -q
 
 ## Known limitations
 
-Provider access from a browser can be blocked by relay availability, throttling, network policy or ticker coverage. The bulk downloader reports symbols that fail and downloads the successful rows; it does not fabricate missing prices. Use CSV upload or the Python backend if fetch fails. Adjusted close and corporate actions vary by provider; this is not tick-level or intraday execution. The simple simulation does not model market impact, liquidity constraints, taxes, dividends as cash flows, borrow fees, margin, delistings or survivorship bias. The basic train/test split is not a complete walk-forward optimiser.
+Provider access from a browser can be blocked by relay availability, throttling, network policy or ticker coverage. The bulk downloader reports symbols that fail and downloads the successful rows; it does not fabricate missing prices. Use CSV upload or the Python backend if fetch fails. Adjusted close and corporate actions vary by provider; this is not tick-level or intraday execution. The simple simulation does not model market impact, liquidity constraints, taxes, dividends as cash flows, borrow availability/fees, margin, funding rates, delistings or survivorship bias. It operates on one instrument and the OHLCV bars available from the selected provider or uploaded file; it is not a tick-level, order-book, options, multi-asset portfolio or live-execution engine. The basic train/test split is not a complete walk-forward optimiser.
 
 Past performance does not guarantee future results.
