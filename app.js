@@ -34,7 +34,7 @@ function normaliseBars(rows){const adjustmentMode=$("priceAdjustment")?.value||"
 function csvToBars(text){
  const parsed=Papa.parse(text.trim(),{header:true,skipEmptyLines:true,dynamicTyping:true});
  if(parsed.errors.length)throw Error("CSV parse issue: "+parsed.errors[0].message);
- const map={};for(const k of Object.keys(parsed.meta.fields||[]))map[k.toLowerCase().trim()]=k;
+ const map={};for(const field of (parsed.meta.fields||[])){const header=String(field).trim();map[header.toLowerCase()]=header}
  const pick=(r,k)=>r[map[k]];
  for(const k of ["date","open","high","low","close"])if(!map[k])throw Error("CSV missing required column: "+k);
  const known=new Set(["date","open","high","low","close","adj close","adjclose","adj_close","volume"]),used=new Set(),featureMap=[];
