@@ -168,7 +168,7 @@ function parseFormula(source){
 }
 const FORMULA_INDICATORS={sma:"sma",ema:"ema",wma:"wma",vwma:"vwma",rsi:"rsi",atr:"atr",adx:"adx",cci:"cci",roc:"roc",obv:"obv",vwap:"vwap",macd:"macd",macd_signal:"macd_signal",macd_hist:"macd_hist",bb_upper:"bb_upper",bb_middle:"bb_middle",bb_lower:"bb_lower",stoch_k:"stoch_k",stoch_d:"stoch_d",donchian_high:"donchian_high",donchian_low:"donchian_low",volume_sma:"volume_sma"};
 function evaluateFormula(ast,data,index,cache=new Map(),parameterValues={}){
- const n=data.length,bar=data[index];if(!bar)return NaN;
+ const n=data.length,bar=data[index],seriesCache=new Map();if(!bar)return NaN;
  const numeric=x=>typeof x==="boolean"?(x?1:0):Number(x);
  function ev(node,at=index){
   if(at<0||at>=n)return NaN;
@@ -193,7 +193,20 @@ function evaluateFormula(ast,data,index,cache=new Map(),parameterValues={}){
    if(["highest","lowest","sum","avg","stdev","variance"].includes(name)){const period=Math.max(1,Math.min(500,Math.floor(numeric(ev(args[1],at))||1)));if(at-period+1<0)return NaN;const values=[];for(let k=at-period+1;k<=at;k++)values.push(numeric(ev(args[0],k)));if(values.some(x=>!Number.isFinite(x)))return NaN;if(name==="highest")return Math.max(...values);if(name==="lowest")return Math.min(...values);const total=values.reduce((a,b)=>a+b,0),mean=total/values.length;if(name==="sum")return total;if(name==="avg")return mean;const variance=values.reduce((z,x)=>z+(x-mean)**2,0)/values.length;return name==="variance"?variance:Math.sqrt(variance)}
    if(name==="zscore"){const period=Math.max(2,Math.min(500,Math.floor(numeric(ev(args[1],at))||20)));if(at-period+1<0)return NaN;const values=[];for(let k=at-period+1;k<=at;k++)values.push(numeric(ev(args[0],k)));if(values.some(x=>!Number.isFinite(x)))return NaN;const mean=values.reduce((a,b)=>a+b,0)/period,sd=Math.sqrt(values.reduce((z,x)=>z+(x-mean)**2,0)/period);return sd?(values[period-1]-mean)/sd:0}
    if(["correlation","slope","linreg","beta"].includes(name)){const period=Math.max(2,Math.min(500,Math.floor(numeric(ev(args[name==="slope"||name==="linreg"?1:2],at))||20)));if(at-period+1<0)return NaN;const a=[],b=[];for(let k=at-period+1;k<=at;k++){a.push(numeric(ev(args[0],k)));if(name!=="slope"&&name!=="linreg")b.push(numeric(ev(args[1],k)))}if([...a,...b].some(x=>!Number.isFinite(x)))return NaN;const meanA=a.reduce((x,y)=>x+y,0)/period,varianceA=a.reduce((z,x)=>z+(x-meanA)**2,0);const meanX=(period-1)/2,covXA=a.reduce((z,y,i)=>z+(i-meanX)*(y-meanA),0),slopeA=covXA/(period*(period**2-1)/12);if(name==="slope")return slopeA;if(name==="linreg")return meanA+slopeA*(period-1-meanX);const meanB=b.reduce((x,y)=>x+y,0)/period,varianceB=b.reduce((z,x)=>z+(x-meanB)**2,0),cov=b.reduce((z,y,i)=>z+(a[i]-meanA)*(y-meanB),0);if(name==="beta")return varianceB?cov/varianceB:NaN;return varianceA&&varianceB?cov/Math.sqrt(varianceA*varianceB):0}
-   if(FORMULA_INDICATORS[name]){const p=args.map(x=>numeric(ev(x,at)));const params={};if(name.startsWith("macd")){params.fast=p[0]||12;params.slow=p[1]||26;params.signal=p[2]||9}else if(name.startsWith("bb_")){params.period=p[0]||20;params.multiplier=p[1]||2}else if(name!=="obv"){params.period=p[0]||14}const series=fieldSeries(data,FORMULA_INDICATORS[name],params,cache);return series[at]}
+   if(FORMULA_INDICATORS[name]){
+    const sourceArg=args[0],seriesOverload=args.length>=2&&["variable","call","binary","unary"].includes(sourceArg.type)&&["sma","ema","wma","rsi","roc"].includes(name);
+    if(seriesOverload){
+     const period=Math.max(2,Math.min(500,Math.floor(numeric(ev(args[1],at))||14)));
+     if(!seriesCache.has(sourceArg)){const values=data.map((_,k)=>numeric(ev(sourceArg,k)));seriesCache.set(sourceArg,values)}
+     const values=seriesCache.get(sourceArg);let result;
+     if(name==="sma")result=sma(values,period);
+     else if(name==="ema")result=emaNullable(values,period);
+     else if(name==="wma")result=wma(values,period);
+     else if(name==="rsi")result=rsi(values,period);
+     else result=roc(values,period);
+     return result[at]
+    }
+    const p=args.map(x=>numeric(ev(x,at))),params={};if(name.startsWith("macd")){params.fast=p[0]||12;params.slow=p[1]||26;params.signal=p[2]||9}else if(name.startsWith("bb_")){params.period=p[0]||20;params.multiplier=p[1]||2}else if(name!=="obv"){params.period=p[0]||14}const series=fieldSeries(data,FORMULA_INDICATORS[name],params,cache);return series[at]}
    const v=args.map(x=>numeric(ev(x,at)));switch(name){case"abs":return Math.abs(v[0]);case"min":return Math.min(...v);case"max":return Math.max(...v);case"sqrt":return Math.sqrt(v[0]);case"log":return Math.log(v[0]);case"exp":return Math.exp(v[0]);case"pow":return Math.pow(v[0],v[1]);case"round":return Math.round(v[0]);case"floor":return Math.floor(v[0]);case"ceil":return Math.ceil(v[0]);case"between":return v[0]>=v[1]&&v[0]<=v[2];case"if":return v[0]?v[1]:v[2];case"nz":return Number.isFinite(v[0])?v[0]:(v[1]??0);default:throw Error("Unknown function '"+name+"'.")}
   }
   throw Error("Invalid formula syntax tree.")
