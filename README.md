@@ -100,6 +100,16 @@ A sweep is exploratory, not a forecast. Selecting the best combination on the sa
 
 Named strategies can be loaded, duplicated, edited and deleted. They are saved in the current browser's local storage. Use **Export strategy JSON** to back them up or move them to another browser/device; use **Import JSON** to restore them.
 
+### Reusable calculations and signal inspection
+
+Formula strategies can define up to six user-named reusable calculations as `v1` through `v6`. A slot can use price/volume fields, built-in indicators, formula parameters, time-series helpers and extra CSV feature columns; one slot can depend on another. Missing references and circular dependency chains are rejected before a strategy is saved or simulated. The **Preview signals** panel counts long/short entry and exit triggers and lists the most recent signal bars, so rule logic can be checked before a full backtest.
+
+### Combined portfolio testing
+
+The Strategy Lab can test the selected strategy across up to 10 NSE symbols with equal or explicit starting weights. Each symbol is run through the same single-asset engine as an independent capital sleeve; the sleeve equity curves are then summed on their union of historical timestamps. Failed or not-yet-listed sleeves remain in cash. The portfolio chart compares this combined curve with a weighted buy-and-hold benchmark, and the trade export includes the symbol for each trade.
+
+**Portfolio model boundaries:** this is a fixed-initial-allocation basket, not a rebalanced portfolio optimizer. It does not yet model cross-sectional rankings or signals between symbols, portfolio-level shared cash competition, FX conversion, or simultaneous order execution. Extra CSV feature columns are rejected for Yahoo cross-symbol/portfolio tests because those fields are not available in those ticker downloads.
+
 ## Backtesting conventions
 
 - Signals use completed historical bars; market-entry and signal-exit orders execute at the **next bar open**.
