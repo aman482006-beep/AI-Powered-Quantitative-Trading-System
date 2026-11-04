@@ -223,15 +223,16 @@ async function runSimulation(onProgress){
    if(stopHit){reason=cfg.sl&&stopLevel===stopFixed?"stop-loss":"trailing-stop";price=stopLevel}
    else if(targetHit){reason="take-profit";price=targetLevel}
    else if(cfg.maxBars&&i-pos.entryIndex>=cfg.maxBars){reason="time-stop";price=b.open*(1+(pos.side===1?-cfg.slip:cfg.slip))}
+   else if(pending==="reverse-to-long"||pending==="reverse-to-short"){reason="reverse";const nextSide=pending==="reverse-to-long"?1:-1;price=b.open*(1+(pos.side===1?-cfg.slip:cfg.slip));var reversePending=nextSide===1?"enter-long":"enter-short"}
    else if(pending===(pos.side===1?"exit-long":"exit-short")){reason="signal";price=b.open*(1+(pos.side===1?-cfg.slip:cfg.slip))}
-   if(reason){closePosition(pos,price,reason,b.date);pos=null;pending=null}
+   if(reason){closePosition(pos,price,reason,b.date);pos=null;pending=reason==="reverse"?reversePending:null}
    else if(cfg.trailing){pos.bestPrice=pos.side===1?Math.max(pos.bestPrice,b.high):Math.min(pos.bestPrice,b.low)}
   }
   if(!pos&&pending&&pending.startsWith("enter-")&&i>0){const side=pending==="enter-long"?1:-1;pos=openPosition(side,b,i);pending=null}
   const marked=cash+(pos?pos.side*pos.qty*b.close:0);eq.push({date:b.date,equity:marked,close:b.close,exposed:!!pos,side:pos?.side||0});if(pos)exposedBars++;
   livePeak=Math.max(livePeak,marked);liveMaxDD=Math.min(liveMaxDD,marked/livePeak-1);
   if(!pos&&i<bars.length-1){if(sig.longEntry[i])pending="enter-long";else if(sig.shortEntry[i])pending="enter-short"}
-  else if(pos&&i<bars.length-1){if(pos.side===1&&sig.longExit[i])pending="exit-long";else if(pos.side===-1&&sig.shortExit[i])pending="exit-short"}
+  else if(pos&&i<bars.length-1){if(direction==="both"&&pos.side===1&&sig.shortEntry[i])pending="reverse-to-short";else if(direction==="both"&&pos.side===-1&&sig.longEntry[i])pending="reverse-to-long";else if(pos.side===1&&sig.longExit[i])pending="exit-long";else if(pos.side===-1&&sig.shortExit[i])pending="exit-short"}
   if(onProgress&&((i+1)%progressEvery===0||i===bars.length-1)){await onProgress({processed:i+1,total:bars.length,date:b.date,equity:marked,return:marked/cfg.capital-1,drawdown:liveMaxDD,trades:trades.length,tradeRows:trades.slice(),series:eq});await new Promise(resolve=>setTimeout(resolve,18))}
  }
  if(pos){const b=bars.at(-1),price=b.close*(1+(pos.side===1?-cfg.slip:cfg.slip));closePosition(pos,price,"end-of-test",b.date);eq[eq.length-1].equity=cash;eq[eq.length-1].exposed=false}
