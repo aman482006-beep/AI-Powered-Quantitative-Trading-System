@@ -30,7 +30,7 @@ The app opens with a synthetic demo series. The Indian equity universe contains 
 
 When a browser blocks provider requests, that is a provider/network/CORS restriction rather than evidence that a symbol does not exist. Use CSV upload or the Python data path.
 
-CSV required fields (case-insensitive): `Date, Open, High, Low, Close, Volume`. `Adj Close` is optional. The `Date` field may include a time and timezone (for example `2026-10-01T09:15:00+05:30`); intraday timestamps are preserved and duplicate timestamps are rejected. Select the matching bar interval in the terminal. Use the **Bars per year** override for non-standard calendars or 24/7 markets. Example:
+CSV required fields (case-insensitive): `Date, Open, High, Low, Close`. `Volume` and `Adj Close` are optional. The `Date` field may include a time and timezone (for example `2026-10-01T09:15:00+05:30`); intraday timestamps are preserved and duplicate timestamps are rejected. Select the matching bar interval in the terminal. Use the **Bars per year** override for non-standard calendars or 24/7 markets. Example:
 
 ```csv
 Date,Open,High,Low,Close,Volume
