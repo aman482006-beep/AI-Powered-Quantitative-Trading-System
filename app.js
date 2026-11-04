@@ -165,7 +165,7 @@ function tokenizeFormula(source){
  while(i<source.length){if(/\s/.test(source[i])){i++;continue}
   const rest=source.slice(i),number=rest.match(/^(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/i),identifier=rest.match(/^[A-Za-z_][A-Za-z0-9_]*/);
   if(number){tokens.push({type:"number",value:Number(number[0])});i+=number[0].length;continue}
-  if(identifier){tokens.push({type:"identifier",value:identifier[0].toLowerCase()});i+=identifier[0].length;continue}
+  if(identifier){const word=identifier[0].toLowerCase(),logic={and:"&&",or:"||",not:"!"}[word];tokens.push(logic?{type:"operator",value:logic}:{type:"identifier",value:word});i+=identifier[0].length;continue}
   const op=["&&","||",">=","<=","==","!=","**","+","-","*","/","%",">","<","!","(",")",","].find(x=>rest.startsWith(x));
   if(op){tokens.push({type:"operator",value:op});i+=op.length;continue}
   throw Error("Unsupported character in formula near: "+rest.slice(0,12))
@@ -174,7 +174,7 @@ function tokenizeFormula(source){
 }
 function parseFormula(source){
  if(!String(source||"").trim())throw Error("Formula cannot be empty.");
- const tokens=tokenizeFormula(String(source)),precedence={"||":1,"&&":2,"==":3,"!=":3,">":3,"<":3,">=":3,"<=":3,"+":4,"-":4,"*":5,"/":5,"%":5,"**":6};let pos=0;
+ const tokens=tokenizeFormula(String(source)),precedence={"||":1,"&&":2,"==":3,"!=":3,">":3,"<":3,">=":3,"<=":3,"+":4,"-":4,"*":5,"/":5,"%":5,"**":6,"^":6};let pos=0;
  const peek=()=>tokens[pos],take=()=>tokens[pos++],expect=v=>{if(peek().value!==v)throw Error("Expected '"+v+"' in formula.");take()};
  function primary(){
   const t=take();if(t.type==="number")return{type:"number",value:t.value};
@@ -191,19 +191,20 @@ function parseFormula(source){
  const ast=expression(0);if(peek().type!=="eof")throw Error("Unexpected '"+peek().value+"' at the end of formula.");return ast
 }
 const FORMULA_INDICATORS={sma:"sma",ema:"ema",wma:"wma",vwma:"vwma",rsi:"rsi",atr:"atr",adx:"adx",cci:"cci",roc:"roc",obv:"obv",vwap:"vwap",macd:"macd",macd_signal:"macd_signal",macd_hist:"macd_hist",bb_upper:"bb_upper",bb_middle:"bb_middle",bb_lower:"bb_lower",stoch_k:"stoch_k",stoch_d:"stoch_d",donchian_high:"donchian_high",donchian_low:"donchian_low",volume_sma:"volume_sma",mfi:"mfi",williams_r:"williams_r",aroon_up:"aroon_up",aroon_down:"aroon_down",aroon_osc:"aroon_osc",cmf:"cmf",trix:"trix",keltner_upper:"keltner_upper",keltner_middle:"keltner_middle",keltner_lower:"keltner_lower",chaikin_osc:"chaikin_osc",dpo:"dpo",hma:"hma",dema:"dema",tema:"tema",kama:"kama",psar:"psar",supertrend:"supertrend",supertrend_upper:"supertrend_upper",supertrend_lower:"supertrend_lower",supertrend_direction:"supertrend_direction",ppo:"ppo",ppo_signal:"ppo_signal",ppo_hist:"ppo_hist",ultimate_osc:"ultimate_osc"};
-function evaluateFormula(ast,data,index,cache=new Map(),parameterValues={},seriesCache=new Map(),customIndicatorAsts={}){
+const STATE_FORMULA_FIELDS=new Set(["in_position","position","position_side","entry_price","entry_bar","bars_in_position","bars_held","bars_since_entry","position_return","unrealized_pnl","highest_since_entry","lowest_since_entry","best_price_since_entry","max_favorable_excursion","max_adverse_excursion","position_qty","position_value","entry_fee","borrow_fees","trade_count","equity","cash","bar_index"]);
+function evaluateFormula(ast,data,index,cache=new Map(),parameterValues={},seriesCache=new Map(),customIndicatorAsts={},context={}){
  const n=data.length,bar=data[index];if(!bar)return NaN;
  const numeric=x=>typeof x==="boolean"?(x?1:0):Number(x);
  function ev(node,at=index){
   if(at<0||at>=n)return NaN;
   if(node.type==="number")return node.value;
-  if(node.type==="variable"){const name=node.name,b=data[at];if(/^v[1-6]$/.test(name)){const formulaAst=customIndicatorAsts[name];if(!formulaAst)throw Error("Custom series "+name+" has no formula. Define it in Reusable calculations.");const seriesKey="custom-series:"+name+":"+at;if(seriesCache.has(seriesKey))return seriesCache.get(seriesKey);const value=ev(formulaAst,at);seriesCache.set(seriesKey,value);return value}if(Object.prototype.hasOwnProperty.call(parameterValues,name))return Number(parameterValues[name]);if(["open","high","low","close","volume"].includes(name))return Number(b[name]);if(name==="hl2")return(b.high+b.low)/2;if(name==="hlc3")return(b.high+b.low+b.close)/3;if(name==="ohlc4")return(b.open+b.high+b.low+b.close)/4;if(name.startsWith("x_")){const value=b.features?.[name.slice(2)];return value===undefined?NaN:Number(value)}if(name==="true")return 1;if(name==="false")return 0;throw Error("Unknown field '"+name+"'.")}
+  if(node.type==="variable"){const name=node.name,b=data[at];if(at===index&&Object.prototype.hasOwnProperty.call(context,name))return Number(context[name]);if(STATE_FORMULA_FIELDS.has(name))return NaN;if(/^v[1-6]$/.test(name)){const formulaAst=customIndicatorAsts[name];if(!formulaAst)throw Error("Custom series "+name+" has no formula. Define it in Reusable calculations.");const seriesKey="custom-series:"+name+":"+at;if(seriesCache.has(seriesKey))return seriesCache.get(seriesKey);const value=ev(formulaAst,at);seriesCache.set(seriesKey,value);return value}if(Object.prototype.hasOwnProperty.call(parameterValues,name))return Number(parameterValues[name]);if(["open","high","low","close","volume"].includes(name))return Number(b[name]);if(name==="hl2")return(b.high+b.low)/2;if(name==="hlc3")return(b.high+b.low+b.close)/3;if(name==="ohlc4")return(b.open+b.high+b.low+b.close)/4;if(name.startsWith("x_")){const value=b.features?.[name.slice(2)];return value===undefined?NaN:Number(value)}if(name==="true")return 1;if(name==="false")return 0;throw Error("Unknown field '"+name+"'.")}
   if(node.type==="unary"){const v=ev(node.arg,at);return node.op==="!"?!v:node.op==="-"?-numeric(v):numeric(v)}
   if(node.type==="binary"){
    if(node.op==="&&"){const a=ev(node.left,at);return!!a&&!!ev(node.right,at)}
    if(node.op==="||"){const a=ev(node.left,at);return!!a||!!ev(node.right,at)}
    const a=numeric(ev(node.left,at)),b=numeric(ev(node.right,at));
-   switch(node.op){case"+":return a+b;case"-":return a-b;case"*":return a*b;case"/":return b===0?NaN:a/b;case"%":return b===0?NaN:a%b;case"**":return a**b;case">":return a>b;case"<":return a<b;case">=":return a>=b;case"<=":return a<=b;case"==":return a===b;case"!=":return a!==b;default:throw Error("Unsupported operator "+node.op)}
+   switch(node.op){case"+":return a+b;case"-":return a-b;case"*":return a*b;case"/":return b===0?NaN:a/b;case"%":return b===0?NaN:a%b;case"**":case"^":return a**b;case">":return a>b;case"<":return a<b;case">=":return a>=b;case"<=":return a<=b;case"==":return a===b;case"!=":return a!==b;default:throw Error("Unsupported operator "+node.op)}
   }
   if(node.type==="call"){
    const name=node.name,args=node.args;
@@ -259,18 +260,26 @@ function buildCustomIndicatorAsts(definitions={}){
  return asts
 }
 function compileFormulaSignals(data,entryText,exitText,parameterValues={},indicatorDefinitions={}){
- const entryAst=parseFormula(entryText),exitAst=parseFormula(exitText),customIndicatorAsts=buildCustomIndicatorAsts(indicatorDefinitions),entry=Array(data.length).fill(false),exit=Array(data.length).fill(false),cache=new Map(),seriesCache=new Map();
- for(let i=1;i<data.length;i++){const e=evaluateFormula(entryAst,data,i,cache,parameterValues,seriesCache,customIndicatorAsts),x=evaluateFormula(exitAst,data,i,cache,parameterValues,seriesCache,customIndicatorAsts);entry[i]=Number.isFinite(e)&&!!e;exit[i]=Number.isFinite(x)&&!!x}
- return{entry,exit}
+ const entryAst=parseFormula(entryText),exitAst=parseFormula(exitText),customIndicatorAsts=buildCustomIndicatorAsts(indicatorDefinitions),entry=Array(data.length).fill(false),exit=Array(data.length).fill(false),cache=new Map();
+ const evaluateAt=(i,context={})=>{const seriesCache=new Map(),e=evaluateFormula(entryAst,data,i,cache,parameterValues,seriesCache,customIndicatorAsts,context),x=evaluateFormula(exitAst,data,i,cache,parameterValues,seriesCache,customIndicatorAsts,context);return{entry:Number.isFinite(e)&&!!e,exit:Number.isFinite(x)&&!!x}};
+ for(let i=1;i<data.length;i++){const result=evaluateAt(i,{});entry[i]=result.entry;exit[i]=result.exit}
+ return{entry,exit,evaluateAt}
 }
 function calcCustomSignals(data,strategy){
  const n=data.length,empty=()=>Array(n).fill(false),direction=strategy.direction||"long";
  function compileRules(rules,logic){const cache=new Map(),compiled=(rules||[]).map(rule=>({rule,left:fieldSeries(data,rule.left.field,rule.left,cache),right:rule.right.mode==="value"?Number(rule.right.value):fieldSeries(data,rule.right.field,rule.right,cache)}));function test(item,i){const{rule,left,right}=item,a=Array.isArray(left)?left[i]:left,b=Array.isArray(right)?right[i]:right;if(!Number.isFinite(a)||!Number.isFinite(b))return false;switch(rule.operator){case"crosses_above":{if(i<1)return false;const pa=left[i-1],pb=Array.isArray(right)?right[i-1]:right;return Number.isFinite(pa)&&Number.isFinite(pb)&&pa<=pb&&a>b}case"crosses_below":{if(i<1)return false;const pa=left[i-1],pb=Array.isArray(right)?right[i-1]:right;return Number.isFinite(pa)&&Number.isFinite(pb)&&pa>=pb&&a<b}case"greater_than":return a>b;case"less_than":return a<b;case"greater_equal":return a>=b;case"less_equal":return a<=b;default:return false}}const out=empty();for(let i=1;i<n;i++){if(compiled.length)out[i]=logic==="any"?compiled.some(x=>test(x,i)):compiled.every(x=>test(x,i))}return out}
- let primaryEntry,primaryExit,shortEntry=empty(),shortExit=empty();
- if(strategy.mode==="formula"){const params=strategy.parameterValues||{p1:20,p2:14,p3:50};const primary=compileFormulaSignals(data,strategy.entryFormula,strategy.exitFormula,params,strategy.indicators||{});primaryEntry=primary.entry;primaryExit=primary.exit;if(direction==="both"){const extra=compileFormulaSignals(data,strategy.shortEntryFormula,strategy.shortExitFormula,params,strategy.indicators||{});shortEntry=extra.entry;shortExit=extra.exit}}
- else{primaryEntry=compileRules(strategy.entry,strategy.entryLogic);primaryExit=compileRules(strategy.exit,strategy.exitLogic);if(direction==="both"){shortEntry=compileRules(strategy.shortEntry,strategy.shortEntryLogic);shortExit=compileRules(strategy.shortExit,strategy.shortExitLogic)}}
- const longEntry=empty(),longExit=empty();if(direction==="short"){shortEntry=primaryEntry;shortExit=primaryExit}else{for(let i=0;i<n;i++){longEntry[i]=primaryEntry[i];longExit[i]=primaryExit[i]}}
- return{longEntry,longExit,shortEntry,shortExit,ind:{}}
+ let primaryEntry,primaryExit,shortEntry=empty(),shortExit=empty(),evaluateAt=null;
+ const longEntry=empty(),longExit=empty();
+ if(strategy.mode==="formula"){
+  const params=strategy.parameterValues||{p1:20,p2:14,p3:50},primary=compileFormulaSignals(data,strategy.entryFormula,strategy.exitFormula,params,strategy.indicators||{}),extra=direction==="both"?compileFormulaSignals(data,strategy.shortEntryFormula,strategy.shortExitFormula,params,strategy.indicators||{}):null;
+  evaluateAt=(i,context={})=>{const p=primary.evaluateAt(i,context),q=extra?extra.evaluateAt(i,context):{entry:false,exit:false};return direction==="short"?{longEntry:false,longExit:false,shortEntry:p.entry,shortExit:p.exit}:{longEntry:p.entry,longExit:p.exit,shortEntry:q.entry,shortExit:q.exit}};
+  for(let i=1;i<n;i++){const result=evaluateAt(i,{});longEntry[i]=result.longEntry;longExit[i]=result.longExit;shortEntry[i]=result.shortEntry;shortExit[i]=result.shortExit}
+ }else{
+  primaryEntry=compileRules(strategy.entry,strategy.entryLogic);primaryExit=compileRules(strategy.exit,strategy.exitLogic);
+  if(direction==="short"){shortEntry=primaryEntry;shortExit=primaryExit}else{for(let i=0;i<n;i++){longEntry[i]=primaryEntry[i];longExit[i]=primaryExit[i]}}
+  if(direction==="both"){shortEntry=compileRules(strategy.shortEntry,strategy.shortEntryLogic);shortExit=compileRules(strategy.shortExit,strategy.shortExitLogic)}
+ }
+ return{longEntry,longExit,shortEntry,shortExit,evaluateAt,ind:{}}
 }
 function paramsFromUI(){const o={};document.querySelectorAll("[data-param]").forEach(x=>o[x.dataset.param]=Number(x.value));if(o.fast&&o.slow&&o.fast>=o.slow)throw Error("Fast period must be smaller than slow period.");if(o.oversold>=o.overbought)throw Error("RSI oversold must be below overbought.");return o}
 async function runSimulation(onProgress,customOverride=null,runOptions={}){if(bars.some(b=>b.adjustmentFactor!==undefined)&&lastAdjustmentMode!==$("priceAdjustment").value)throw Error("Price adjustment setting changed after data was loaded. Reload or re-upload the data to apply it.");
