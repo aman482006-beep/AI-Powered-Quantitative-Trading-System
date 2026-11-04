@@ -80,7 +80,7 @@ close > SMA(p1) && RSI(p2) > p3 && ADX(14) > 20
 crossesBelow(close, EMA(p1)) || RSI(p2) > 80
 ```
 
-The parser accepts market fields, indicator functions, arithmetic, comparisons, AND/OR/NOT, parentheses, and helpers including `crossesAbove`, `crossesBelow`, `rising`, `falling`, `highest`, `lowest`, `sum`, `avg`, `between`, `min`, `max`, `abs`, `sqrt`, `log` and `pow`. Formulas are parsed into a restricted expression tree; they are not executed as arbitrary JavaScript. Reusable variables `p1`, `p2` and `p3` can be assigned current values and min/max/step ranges.
+The parser accepts market fields, indicator functions, arithmetic, comparisons, AND/OR/NOT, parentheses, and helpers including `crossesAbove`, `crossesBelow`, `rising`, `falling`, `lag`, `prev`, `change`, `pctChange`, `barssince`, `valuewhen`, `highest`, `lowest`, `sum`, `avg`, `stdev`, `variance`, `zscore`, `correlation`, `beta`, `slope`, `linreg`, `between`, `min`, `max`, `abs`, `sqrt`, `log`, `exp`, `pow`, `round`, `floor`, `ceil`, `if` and `nz`. Formulas are parsed into a restricted expression tree; they are not executed as arbitrary JavaScript. Reusable variables `p1`, `p2` and `p3` can be assigned current values and min/max/step ranges.
 
 ### Parameter sweeps
 
