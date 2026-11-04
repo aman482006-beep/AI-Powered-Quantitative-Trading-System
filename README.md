@@ -57,7 +57,7 @@ Optional LLM configuration: copy `.env.example` to `.env` and set `GEMINI_API_KE
 
 ## Custom strategy builder
 
-The GitHub Pages app includes a no-code visual builder and a safe formula editor. The formula editor includes editable starter templates for trend following, RSI bounce, Donchian breakout, Bollinger reversion, MACD crossover, and MACD long/short logic.
+The GitHub Pages app includes a visual rule builder and a formula editor. Use the visual builder for common comparisons, or switch to formulas when a strategy needs mixed logic, nested conditions, custom calculations, time filters, candle patterns or position-aware exits. Starter templates include trend following, RSI bounce, Donchian breakout, Bollinger reversion, MACD long/short, Supertrend long/short, candle-pattern reversals and position-aware exits.
 
 ### Visual builder
 
@@ -65,13 +65,13 @@ Create separate long-entry, long-exit, short-entry and short-cover rules. Each g
 
 Supported visual fields and indicators:
 - Price and volume: Open, High, Low, Close, Volume, HL2, HLC3, OHLC4.
-- Trend and volume-weighted: SMA, EMA, WMA, VWMA, rolling VWAP, volume SMA, Keltner channels.
-- Momentum and volatility: RSI, MACD line/signal/histogram, ATR, ADX, CCI, ROC, TRIX, Williams %R, DPO.
-- Flow and range: MFI, Aroon up/down/oscillator, Chaikin Money Flow, Chaikin oscillator, Bollinger bands, Stochastic %K/%D, Donchian high/low, OBV.
+- Trend and volume-weighted: SMA, EMA, WMA, VWMA, HMA, DEMA, TEMA, KAMA, rolling VWAP, volume SMA, Keltner channels, Parabolic SAR and Supertrend.
+- Momentum and volatility: RSI, MACD line/signal/histogram, PPO, ATR, ADX, CCI, ROC, TRIX, Ultimate Oscillator, Williams %R and DPO.
+- Flow, range and candle geometry: MFI, Aroon up/down/oscillator, Chaikin Money Flow, Chaikin oscillator, Bollinger bands, Stochastic %K/%D, Donchian high/low, OBV, true range, candle body/wicks, gap and body percentages.
 
 CSV files can include additional numeric columns alongside OHLCV, for example sentiment, P/E, revenue growth, index returns, factor scores or proprietary signals. Each extra numeric column becomes a formula variable prefixed with `x_` (for example `x_sentiment` or `x_pe`) and is available in the visual rule builder after upload. Missing cells remain missing; the app does not forward-fill or interpolate them. Users must align feature values to the correct historical timestamp and avoid look-ahead leakage. Formula indicators can operate over custom series too, for example `SMA(x_sentiment, 20)` or `EMA(x_revenue_growth, 10)`.
 
-Comparisons include crosses above/below, greater than, less than, greater/equal and less/equal. Indicator parameters (periods, MACD fast/slow/signal and Bollinger multiplier) are editable per rule.
+Comparisons include crosses above/below, greater than, less than, greater/equal, less/equal, equals and does-not-equal. Indicator parameters are editable per rule, including custom parameters for KAMA, Supertrend and Parabolic SAR. The visual editor supports one ALL/ANY group per entry or exit side; use the formula editor when you need nested parentheses or mixed AND/OR expressions.
 
 ### Formula editor
 
@@ -82,7 +82,15 @@ close > SMA(p1) && RSI(p2) > p3 && ADX(14) > 20
 crossesBelow(close, EMA(p1)) || RSI(p2) > 80
 ```
 
-The parser accepts market fields, indicator functions, arithmetic, comparisons, AND/OR/NOT, parentheses, and helpers including `crossesAbove`, `crossesBelow`, `rising`, `falling`, `lag`, `prev`, `change`, `pctChange`, `barssince`, `valuewhen`, `highest`, `lowest`, `sum`, `avg`, `stdev`, `variance`, `zscore`, `correlation`, `beta`, `slope`, `linreg`, `between`, `min`, `max`, `abs`, `sqrt`, `log`, `exp`, `pow`, `round`, `floor`, `ceil`, `if` and `nz`. Formulas are parsed into a restricted expression tree; they are not executed as arbitrary JavaScript. Reusable variables `p1` through `p6` can be assigned current values and min/max/step ranges. Date/time helpers (`hour`, `minute`, `time`, `dayofweek`, `dayofmonth`, `month`, `year`, `session`) accept an optional UTC offset in minutes, so intraday rules can use the exchange's local clock.
+The parser accepts market fields, indicator functions, arithmetic, comparisons, AND/OR/NOT (also `and`, `or`, `not`), parentheses and exponentiation. Rolling helpers include `crossesAbove`, `crossesBelow`, `rising`, `falling`, `lag`, `prev`, `change`, `pctChange`, `barssince`, `valuewhen`, `highest`, `lowest`, `highestbars`, `lowestbars`, `count`, `all`, `any`, `sum`, `avg`, `median`, `mad`, `percentile`, `percentrank`, `stdev`, `variance`, `zscore`, `correlation`, `beta`, `slope` and `linreg`. Math helpers include `between`, `min`, `max`, `abs`, `sqrt`, `log`, `ln`, `log10`, `exp`, `pow`, `sign`, `clamp`, `sin`, `cos`, `tan`, `atan`, `tanh`, `round`, `floor`, `ceil`, `isfinite`, `isnan`, `if` and `nz`. Formulas are parsed into a restricted expression tree; they are not executed as arbitrary JavaScript.
+
+Candle helpers include `bullish_engulfing`, `bearish_engulfing`, `bullish_harami`, `bearish_harami`, `inside_bar`, `outside_bar`, `hammer`, `shooting_star`, `doji`, `marubozu`, `gap_up`, `gap_down`, `body`, `range`, `upper_wick`, `lower_wick`, `body_pct`, `range_pct` and `gap_pct`. Candle patterns are simple OHLC geometry rules, not guaranteed reversal signals.
+
+Higher-timeframe helpers include `HTF_SMA`, `HTF_EMA`, `HTF_RSI`, `HTF_ATR`, `HTF_ADX`, `HTF_ROC`, `HTF_HMA`, `HTF_DEMA`, `HTF_TEMA`, `HTF_SUPERTREND` and `HTF_MACD`. They group a chosen number of completed bars and only expose a group once it is complete. This is a bar-count aggregation, not a calendar-aware daily/weekly/monthly exchange-session resampler.
+
+Position-aware formulas can reference `in_position`, `position`, `position_side`, `entry_price`, `entry_bar`, `bars_in_position`, `bars_held`, `bars_since_entry`, `position_return`, `unrealized_pnl`, `highest_since_entry`, `lowest_since_entry`, `best_price_since_entry`, `max_favorable_excursion`, `max_adverse_excursion`, `position_qty`, `position_value`, `entry_fee`, `borrow_fees`, `trade_count`, `equity`, `cash` and `bar_index`. Returns and excursions are percentages; P&L, equity, cash and fees use the dataset currency. Position context is recorded during the simulation, so rolling functions can inspect prior bars' position state too. Example: `in_position && (position_return >= p3 || bars_held >= p4)`.
+
+Reusable variables `p1` through `p10` can be assigned labels, current values and min/max/step ranges. Up to ten custom calculations `v1` through `v10` can be named, chained and reused. Formulas remain a restricted research DSL; this browser app does not run arbitrary Python/JavaScript, user-defined code libraries or custom ML models. Use CSV feature columns for externally calculated signals. Date/time helpers (`hour`, `minute`, `time`, `dayofweek`, `dayofmonth`, `month`, `year`, `session`) accept an optional UTC offset in minutes, so intraday rules can use the exchange's local clock.
 
 ### Cross-symbol robustness tests
 
@@ -92,7 +100,7 @@ This is a **robustness comparison**, not a multi-asset portfolio backtest: every
 
 ### Parameter sweeps
 
-Save a formula strategy, load historical data, and run a bounded parameter sweep across the configured ranges for `p1` through `p6`. Each sweep is capped at 120 combinations and can rank results by Sharpe, total return, Sortino or drawdown. The best in-sample combination can be applied to the saved strategy.
+Save a formula strategy, load historical data, and run a bounded parameter sweep across the configured ranges for `p1` through `p10`. Each sweep is capped at 120 combinations and can rank results by Sharpe, total return, Sortino or drawdown. The best in-sample combination can be applied to the saved strategy.
 
 A sweep is exploratory, not a forecast. Selecting the best combination on the same history used to report performance creates data-mining and overfitting risk. Use a separate chronological holdout or walk-forward test before drawing conclusions.
 
@@ -102,7 +110,7 @@ Named strategies can be loaded, duplicated, edited and deleted. They are saved i
 
 ### Reusable calculations and signal inspection
 
-Formula strategies can define up to six user-named reusable calculations as `v1` through `v6`. A slot can use price/volume fields, built-in indicators, formula parameters, time-series helpers and extra CSV feature columns; one slot can depend on another. Missing references and circular dependency chains are rejected before a strategy is saved or simulated. The **Preview signals** panel counts long/short entry and exit triggers and lists the most recent signal bars, so rule logic can be checked before a full backtest.
+Formula strategies can define up to ten user-named reusable calculations as `v1` through `v10`. A slot can use price/volume fields, built-in indicators, formula parameters, time-series helpers and extra CSV feature columns; one slot can depend on another. Missing references and circular dependency chains are rejected before a strategy is saved or simulated. The **Preview signals** panel counts long/short entry and exit triggers and lists the most recent signal bars. Position-aware formulas are evaluated in the actual backtest; the preview flags them because there is no open position context in a standalone signal scan.
 
 ### Combined portfolio testing
 
