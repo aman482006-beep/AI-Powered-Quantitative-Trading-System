@@ -346,7 +346,7 @@ async function runSimulation(onProgress,customOverride=null,runOptions={}){if(ba
   const units=Math.floor(allocation/(px*(1+cfg.fee))*1000000)/1000000;if(!(units>0))return null;
   const notional=units*px,fee=notional*cfg.fee;
   cash+=side===1?-(notional+fee):(notional-fee);
-  return{side,date:b.date,entryPrice:px,entryIndex:index,entryFee:fee,qty:units,bestPrice:px,entries:1,lastEntryIndex:index}
+  return{side,date:b.date,entryPrice:px,entryIndex:index,entryFee:fee,qty:units,bestPrice:px,highestPrice:b.high,lowestPrice:b.low,entries:1,lastEntryIndex:index}
  }
  function addPosition(position,side,b,index){
   const lot=openPosition(side,b,index);if(!lot)return position;
@@ -380,15 +380,17 @@ async function runSimulation(onProgress,customOverride=null,runOptions={}){if(ba
    else if(pending==="reverse-to-long"||pending==="reverse-to-short"){reason="reverse";const nextSide=pending==="reverse-to-long"?1:-1;price=b.open*(1+(pos.side===1?-cfg.slip:cfg.slip));var reversePending=nextSide===1?"enter-long":"enter-short"}
    else if(pending===(pos.side===1?"exit-long":"exit-short")){reason="signal";price=b.open*(1+(pos.side===1?-cfg.slip:cfg.slip))}
    if(reason){closePosition(pos,price,reason,b.date);pos=null;pending=reason==="reverse"?reversePending:null}
-   else if(cfg.trailing){pos.bestPrice=pos.side===1?Math.max(pos.bestPrice,b.high):Math.min(pos.bestPrice,b.low)}
+   else{pos.bestPrice=pos.side===1?Math.max(pos.bestPrice,b.high):Math.min(pos.bestPrice,b.low);pos.highestPrice=Math.max(pos.highestPrice??pos.entryPrice,b.high);pos.lowestPrice=Math.min(pos.lowestPrice??pos.entryPrice,b.low)}
   }
   if(!pos&&pending&&pending.startsWith("enter-")&&i>0){const side=pending==="enter-long"?1:-1;pos=openPosition(side,b,i);pending=null}
   else if(pos&&pending==="add-long"&&pos.side===1&&(pos.entries||1)<cfg.maxEntries){pos=addPosition(pos,1,b,i);pending=null}
   else if(pos&&pending==="add-short"&&pos.side===-1&&(pos.entries||1)<cfg.maxEntries){pos=addPosition(pos,-1,b,i);pending=null}
   const marked=cash+(pos?pos.side*pos.qty*b.close:0);eq.push({date:b.date,equity:marked,close:b.close,exposed:!!pos,side:pos?.side||0});if(pos)exposedBars++;
   livePeak=Math.max(livePeak,marked);liveMaxDD=Math.min(liveMaxDD,marked/livePeak-1);
-  if(!pos&&i<bars.length-1){if(sig.longEntry[i])pending="enter-long";else if(sig.shortEntry[i])pending="enter-short"}
-  else if(pos&&i<bars.length-1){if(direction==="both"&&pos.side===1&&sig.shortEntry[i])pending="reverse-to-short";else if(direction==="both"&&pos.side===-1&&sig.longEntry[i])pending="reverse-to-long";else if(pos.side===1&&sig.longExit[i])pending="exit-long";else if(pos.side===-1&&sig.shortExit[i])pending="exit-short";else if(pos.side===1&&sig.longEntry[i]&&(pos.entries||1)<cfg.maxEntries)pending="add-long";else if(pos.side===-1&&sig.shortEntry[i]&&(pos.entries||1)<cfg.maxEntries)pending="add-short"}
+  const context={in_position:pos?1:0,position:pos?.side||0,position_side:pos?.side||0,entry_price:pos?.entryPrice??NaN,entry_bar:pos?.entryIndex??-1,bars_in_position:pos?i-pos.entryIndex:0,bars_held:pos?i-pos.entryIndex:0,bars_since_entry:pos?i-pos.entryIndex:0,position_return:pos?pos.side*(b.close-pos.entryPrice)/pos.entryPrice*100:0,unrealized_pnl:pos?pos.side*(b.close-pos.entryPrice)*pos.qty-(pos.entryFee||0)-(pos.borrowFees||0):0,highest_since_entry:pos?.highestPrice??NaN,lowest_since_entry:pos?.lowestPrice??NaN,best_price_since_entry:pos?.bestPrice??NaN,max_favorable_excursion:pos?Math.max(0,pos.side===1?(pos.highestPrice-pos.entryPrice)/pos.entryPrice*100:(pos.entryPrice-pos.lowestPrice)/pos.entryPrice*100):0,max_adverse_excursion:pos?Math.min(0,pos.side===1?(pos.lowestPrice-pos.entryPrice)/pos.entryPrice*100:(pos.entryPrice-pos.highestPrice)/pos.entryPrice*100):0,position_qty:pos?.qty||0,position_value:pos?Math.abs(pos.qty*b.close):0,entry_fee:pos?.entryFee||0,borrow_fees:pos?.borrowFees||0,trade_count:trades.length,equity:marked,cash,bar_index:i};
+  const liveSignals=sig.evaluateAt?sig.evaluateAt(i,context):null,longEntry=liveSignals?liveSignals.longEntry:sig.longEntry[i],longExit=liveSignals?liveSignals.longExit:sig.longExit[i],shortEntry=liveSignals?liveSignals.shortEntry:sig.shortEntry[i],shortExit=liveSignals?liveSignals.shortExit:sig.shortExit[i];
+  if(!pos&&i<bars.length-1){if(longEntry)pending="enter-long";else if(shortEntry)pending="enter-short"}
+  else if(pos&&i<bars.length-1){if(direction==="both"&&pos.side===1&&shortEntry)pending="reverse-to-short";else if(direction==="both"&&pos.side===-1&&longEntry)pending="reverse-to-long";else if(pos.side===1&&longExit)pending="exit-long";else if(pos.side===-1&&shortExit)pending="exit-short";else if(pos.side===1&&longEntry&&(pos.entries||1)<cfg.maxEntries)pending="add-long";else if(pos.side===-1&&shortEntry&&(pos.entries||1)<cfg.maxEntries)pending="add-short"}
   if(onProgress&&((i+1)%progressEvery===0||i===bars.length-1)){await onProgress({processed:i+1,total:bars.length,date:b.date,equity:marked,return:marked/cfg.capital-1,drawdown:liveMaxDD,trades:trades.length,tradeRows:trades.slice(),series:eq});await new Promise(resolve=>setTimeout(resolve,18))}
  }
  if(pos){const b=bars.at(-1),price=b.close*(1+(pos.side===1?-cfg.slip:cfg.slip));closePosition(pos,price,"end-of-test",b.date);eq[eq.length-1].equity=cash;eq[eq.length-1].exposed=false}
