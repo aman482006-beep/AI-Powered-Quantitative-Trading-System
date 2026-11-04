@@ -77,10 +77,28 @@ function rsi(a,p){const o=Array(a.length).fill(null);let gain=0,loss=0;for(let i
 function calcSignals(data,type,par){const c=data.map(x=>x.close),n=c.length,entry=Array(n).fill(false),exit=Array(n).fill(false),ind={};if(type==="sma"||type==="ema"){const fn=type==="sma"?sma:ema;ind.fast=fn(c,par.fast);ind.slow=fn(c,par.slow);for(let i=1;i<n;i++){if(ind.fast[i]!=null&&ind.slow[i]!=null&&ind.fast[i-1]!=null&&ind.slow[i-1]!=null){entry[i]=ind.fast[i]>ind.slow[i]&&ind.fast[i-1]<=ind.slow[i-1];exit[i]=ind.fast[i]<ind.slow[i]&&ind.fast[i-1]>=ind.slow[i-1]}}}else if(type==="rsi"){ind.rsi=rsi(c,par.period);for(let i=1;i<n;i++){entry[i]=ind.rsi[i]>par.oversold&&ind.rsi[i-1]<=par.oversold;exit[i]=ind.rsi[i]<par.overbought&&ind.rsi[i-1]>=par.overbought}}else if(type==="macd"){ind.macd=ema(c,par.fast).map((v,i)=>v==null||ema(c,par.slow)[i]==null?null:v-ema(c,par.slow)[i]);const valid=ind.macd.map(x=>x??0),first=valid.findIndex((_,i)=>i>=par.slow-1);ind.signal=ema(valid,par.signal);for(let i=1;i<n;i++){entry[i]=ind.macd[i]!=null&&ind.signal[i]!=null&&ind.macd[i]>ind.signal[i]&&ind.macd[i-1]<=ind.signal[i-1];exit[i]=ind.macd[i]!=null&&ind.signal[i]!=null&&ind.macd[i]<ind.signal[i]&&ind.macd[i-1]>=ind.signal[i-1]}}else if(type==="bb"){ind.middle=sma(c,par.period);ind.sd=c.map((_,i)=>i+1<par.period?null:Math.sqrt(c.slice(i-par.period+1,i+1).reduce((s,x)=>s+(x-ind.middle[i])**2,0)/par.period));ind.lower=ind.middle.map((x,i)=>x==null?null:x-par.std*ind.sd[i]);for(let i=1;i<n;i++){entry[i]=ind.lower[i]!=null&&c[i]>ind.lower[i]&&c[i-1]<=ind.lower[i-1];exit[i]=ind.middle[i]!=null&&c[i]>=ind.middle[i]&&c[i-1]<ind.middle[i-1]}}else if(type==="momentum"){ind.high=Array(n).fill(null);ind.ma=sma(c,par.period);for(let i=par.period;i<n;i++){ind.high[i]=Math.max(...data.slice(i-par.period,i).map(x=>x.high));entry[i]=c[i]>ind.high[i]&&c[i-1]<=ind.high[i];exit[i]=ind.ma[i]!=null&&c[i]<ind.ma[i]}}return{entry,exit,ind}}
 function calcCustomSignals(data,strategy){
  const n=data.length,entry=Array(n).fill(false),exit=Array(n).fill(false),cache=new Map();
- function values(spec){if(spec.mode==="value")return Number(spec.value);const field=spec.field,period=Math.max(2,Math.min(500,Math.floor(Number(spec.period)||20)));if(field==="close"||field==="open"||field==="high"||field==="low"||field==="volume")return data.map(b=>Number(b[field]));const key=field+":"+period;if(cache.has(key))return cache.get(key);const closes=data.map(b=>b.close);let out;if(field==="sma")out=sma(closes,period);else if(field==="ema")out=ema(closes,period);else if(field==="rsi")out=period>=n?Array(n).fill(null):rsi(closes,period);else out=Array(n).fill(null);cache.set(key,out);return out}
- function test(rule,i){const left=values(rule.left),right=values(rule.right);const a=Array.isArray(left)?left[i]:left,b=Array.isArray(right)?right[i]:right;if(!Number.isFinite(a)||!Number.isFinite(b))return false;switch(rule.operator){case"crosses_above":{if(i<1)return false;const pa=left[i-1],pb=Array.isArray(right)?right[i-1]:right;return Number.isFinite(pa)&&Number.isFinite(pb)&&pa<=pb&&a>b}case"crosses_below":{if(i<1)return false;const pa=left[i-1],pb=Array.isArray(right)?right[i-1]:right;return Number.isFinite(pa)&&Number.isFinite(pb)&&pa>=pb&&a<b}case"greater_than":return a>b;case"less_than":return a<b;case"greater_equal":return a>=b;case"less_equal":return a<=b;default:return false}}
- function group(rules,logic,i){if(!Array.isArray(rules)||!rules.length)return false;return logic==="any"?rules.some(r=>test(r,i)):rules.every(r=>test(r,i))}
- for(let i=1;i<n;i++){entry[i]=group(strategy.entry,strategy.entryLogic,i);exit[i]=group(strategy.exit,strategy.exitLogic,i)}
+ function values(spec){
+  if(spec.mode==="value")return Number(spec.value);
+  const field=spec.field,period=Math.max(2,Math.min(500,Math.floor(Number(spec.period)||20))),key=field+(INDICATOR_FIELDS.has(field)?":"+period:"");
+  if(cache.has(key))return cache.get(key);
+  let out;
+  if(field==="close"||field==="open"||field==="high"||field==="low"||field==="volume")out=data.map(b=>Number(b[field]));
+  else{const closes=data.map(b=>b.close);if(field==="sma")out=sma(closes,period);else if(field==="ema")out=ema(closes,period);else if(field==="rsi")out=period>=n?Array(n).fill(null):rsi(closes,period);else out=Array(n).fill(null)}
+  cache.set(key,out);return out
+ }
+ function compile(rules){return rules.map(rule=>({rule,left:values(rule.left),right:values(rule.right)}))}
+ const entryRules=compile(strategy.entry),exitRules=compile(strategy.exit);
+ function test(item,i){const {rule,left,right}=item,a=Array.isArray(left)?left[i]:left,b=Array.isArray(right)?right[i]:right;if(!Number.isFinite(a)||!Number.isFinite(b))return false;switch(rule.operator){
+  case"crosses_above":{if(i<1)return false;const pa=left[i-1],pb=Array.isArray(right)?right[i-1]:right;return Number.isFinite(pa)&&Number.isFinite(pb)&&pa<=pb&&a>b}
+  case"crosses_below":{if(i<1)return false;const pa=left[i-1],pb=Array.isArray(right)?right[i-1]:right;return Number.isFinite(pa)&&Number.isFinite(pb)&&pa>=pb&&a<b}
+  case"greater_than":return a>b;
+  case"less_than":return a<b;
+  case"greater_equal":return a>=b;
+  case"less_equal":return a<=b;
+  default:return false
+ }}
+ function group(rules,logic,i){if(!rules.length)return false;return logic==="any"?rules.some(r=>test(r,i)):rules.every(r=>test(r,i))}
+ for(let i=1;i<n;i++){entry[i]=group(entryRules,strategy.entryLogic,i);exit[i]=group(exitRules,strategy.exitLogic,i)}
  return{entry,exit,ind:{}}
 }
 function paramsFromUI(){const o={};document.querySelectorAll("[data-param]").forEach(x=>o[x.dataset.param]=Number(x.value));if(o.fast&&o.slow&&o.fast>=o.slow)throw Error("Fast period must be smaller than slow period.");if(o.oversold>=o.overbought)throw Error("RSI oversold must be below overbought.");return o}
