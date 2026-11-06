@@ -7,13 +7,13 @@ const html=fs.readFileSync(path.join(root,"index.html"),"utf8");
 const app=fs.readFileSync(path.join(root,"app.js"),"utf8");
 
 test("all static application IDs are unique",()=>{
- const ids=[...html.matchAll(/\\bid="([^"]+)"/g)].map(x=>x[1]);
+ const ids=[...html.matchAll(/id="([^"]+)"/g)].map(x=>x[1]);
  assert.equal(new Set(ids).size,ids.length,"Duplicate HTML IDs make controls ambiguous");
 });
 
 test("browser script references existing static controls",()=>{
- const ids=new Set([...html.matchAll(/\\bid="([^"]+)"/g)].map(x=>x[1]));
- const references=[...app.matchAll(/\\$\\("([^"]+)"\\)/g)].map(x=>x[1]);
+ const ids=new Set([...html.matchAll(/id="([^"]+)"/g)].map(x=>x[1]));
+ const references=[...app.matchAll(/\$\("([^"]+)"\)/g)].map(x=>x[1]);
  const missing=[...new Set(references.filter(id=>!ids.has(id)))];
  assert.deepEqual(missing,[],"Missing controls referenced by app.js");
 });
@@ -22,9 +22,10 @@ test("advanced execution controls remain available in a collapsed section",()=>{
  for(const id of ["sizingMethod","fixedAllocation","riskPerTrade","trailingStop","maxHoldingBars","maxPyramidEntries","riskFreeRate","borrowRate","barsPerYear"]){
   assert.ok(html.includes('id="'+id+'"'),"Missing advanced setting "+id);
  }
- const detail=html.match(/<details class="advanced-config">([\\s\\S]*?)<\\/details>/);
- assert.ok(detail,"Advanced controls should be grouped inside a details disclosure");
- assert.ok(detail[1].includes('id="sizingMethod"'));
+ const start=html.indexOf('<details class="advanced-config">');
+ const end=html.indexOf("</details>",start);
+ assert.ok(start>=0&&end>start,"Advanced controls should be grouped inside a details disclosure");
+ assert.ok(html.slice(start,end).includes('id="sizingMethod"'));
 });
 
 test("formula builder accurately exposes ten reusable calculation slots",()=>{
