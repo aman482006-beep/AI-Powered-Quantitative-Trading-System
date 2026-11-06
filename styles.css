@@ -473,3 +473,16 @@ footer{border-color:#e1e8e1;color:#829087}
 .ticker-browse-all{display:block;width:100%;margin-top:5px;padding:10px;border:0;border-top:1px solid #e7eee7;background:#f8fbf8;color:#2d7651;font:600 10px var(--font);cursor:pointer;text-align:center}
 .ticker-browse-all:hover{background:#edf5ee}
 @media(max-width:420px){.ticker-menu-head{align-items:flex-start;flex-direction:column;gap:4px}.ticker-menu-head span{text-align:left}}
+
+
+/* Make the full execution surface available without crowding a first-time workflow. */
+.quick-start-note{margin:12px 0 0;padding:10px 12px;border:1px solid var(--line);border-left:3px solid var(--green);border-radius:6px;background:var(--panel2);color:#a9b6c6;font-size:10px;line-height:1.7}
+.quick-start-note b{color:var(--green)}
+.advanced-config{margin-top:13px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);overflow:hidden}
+.advanced-config>summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 14px;cursor:pointer;list-style:none;color:var(--text);font:600 11px var(--font)}
+.advanced-config>summary::-webkit-details-marker{display:none}
+.advanced-config>summary::after{content:"+";font:16px var(--mono);color:var(--green)}
+.advanced-config[open]>summary::after{content:"−"}
+.advanced-config>summary small{margin-left:auto;color:var(--muted);font:10px var(--font);letter-spacing:0;text-align:right}
+.advanced-config .form-grid{padding:0 14px 14px;margin-top:0}
+@media(max-width:520px){.advanced-config>summary{align-items:flex-start;flex-wrap:wrap}.advanced-config>summary small{width:100%;margin:0;text-align:left}}
