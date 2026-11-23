@@ -1,4 +1,4 @@
-"""Long-only daily-bar simulator with next-open orders and conservative stop handling."""
+"""Long-only daily-bar simulator with next-open orders and gap-aware stop handling."""
 from __future__ import annotations
 import numpy as np
 import pandas as pd
@@ -30,15 +30,46 @@ def build_signals(data: pd.DataFrame, strategy: str, params: dict):
 
 def backtest(data: pd.DataFrame, strategy="sma", params=None, initial_capital=100000.0, position_size=1.0, commission=0.001, slippage=0.0005, stop_loss=0.0, take_profit=0.0):
     d = data.copy(); params = params or {}
-    if len(d) < 3: raise ValueError("At least three bars are required.")
-    if initial_capital <= 0 or not 0 < position_size <= 1: raise ValueError("Invalid capital or position size.")
+    if len(d) < 3:
+        raise ValueError("At least three bars are required.")
+    try:
+        initial_capital = float(initial_capital)
+        position_size = float(position_size)
+        commission = float(commission)
+        slippage = float(slippage)
+        stop_loss = float(stop_loss)
+        take_profit = float(take_profit)
+    except (TypeError, ValueError):
+        raise ValueError("Execution parameters must be numeric.") from None
+    if not all(np.isfinite(value) for value in (
+        initial_capital, position_size, commission, slippage, stop_loss, take_profit
+    )):
+        raise ValueError("Execution parameters must be finite numbers.")
+    if initial_capital <= 0 or not 0 < position_size <= 1:
+        raise ValueError("Invalid capital or position size.")
+    if not 0 <= commission < 1:
+        raise ValueError("Commission must be between 0 (inclusive) and 1 (exclusive).")
+    if not 0 <= slippage < 1:
+        raise ValueError("Slippage must be between 0 (inclusive) and 1 (exclusive).")
+    if not 0 <= stop_loss < 1:
+        raise ValueError("Stop loss must be between 0 (inclusive) and 1 (exclusive).")
+    if take_profit < 0:
+        raise ValueError("Take profit cannot be negative.")
     entries, exits = build_signals(d, strategy, params)
     cash=float(initial_capital); qty=0.0; pos=None; pending=None; equity=[]; trades=[]
     for i, (date, row) in enumerate(d.iterrows()):
         if pos is not None:
             reason=None; price=None
-            if stop_loss and row.Low <= pos["entry"]*(1-stop_loss): reason="stop-loss"; price=pos["entry"]*(1-stop_loss)
-            elif take_profit and row.High >= pos["entry"]*(1+take_profit): reason="take-profit"; price=pos["entry"]*(1+take_profit)
+            stop_price = pos["entry"] * (1 - stop_loss)
+            target_price = pos["entry"] * (1 + take_profit)
+            if stop_loss and row.Low <= stop_price:
+                reason = "stop-loss"
+                # A stop-market order cannot assume a fill at the stop after a gap.
+                # Use the opening price when it is worse, then apply sell-side slippage.
+                price = min(float(row.Open), stop_price) * (1 - slippage)
+            elif take_profit and row.High >= target_price:
+                reason = "take-profit"
+                price = target_price
             elif pending == "exit" and i > pos["index"]: reason="signal"; price=row.Open*(1-slippage)
             if reason:
                 fee=qty*price*commission; cash += qty*price-fee
