@@ -48,3 +48,55 @@ def test_metrics_drawdown_and_sharpe_conventions():
     assert -1 < m["max_drawdown"] <= 0
     assert np.isfinite(m["sharpe"])
     assert m["number_of_trades"]==len(result["trades"])
+
+
+@pytest.mark.parametrize(
+    ("open_price", "low_price", "expected_exit"),
+    [(80.0, 75.0, 80.0), (95.0, 85.0, 90.0)],
+)
+def test_stop_loss_uses_gap_open_or_stop_price(monkeypatch, open_price, low_price, expected_exit):
+    idx = pd.bdate_range("2026-01-05", periods=3)
+    data = pd.DataFrame(
+        {
+            "Open": [100.0, 100.0, open_price],
+            "High": [101.0, 101.0, max(open_price, 96.0)],
+            "Low": [99.0, 99.0, low_price],
+            "Close": [100.0, 100.0, min(open_price, 90.0)],
+            "Volume": [1000, 1000, 1000],
+        },
+        index=idx,
+    )
+    entries = pd.Series([True, False, False], index=idx)
+    exits = pd.Series(False, index=idx)
+    monkeypatch.setattr("quantlab.engine.build_signals", lambda *args: (entries, exits))
+
+    result = backtest(
+        data,
+        initial_capital=10_000,
+        position_size=1,
+        commission=0,
+        slippage=0,
+        stop_loss=0.10,
+    )
+
+    assert len(result["trades"]) == 1
+    assert result["trades"].iloc[0]["exit"] == expected_exit
+    assert result["trades"].iloc[0]["reason"] == "stop-loss"
+
+
+@pytest.mark.parametrize(
+    ("parameter", "value"),
+    [
+        ("commission", -0.01),
+        ("commission", 1.0),
+        ("slippage", 1.0),
+        ("stop_loss", 1.0),
+        ("stop_loss", -0.1),
+        ("take_profit", -0.1),
+        ("initial_capital", float("inf")),
+    ],
+)
+def test_backtest_rejects_invalid_execution_parameters(parameter, value):
+    kwargs = {parameter: value}
+    with pytest.raises(ValueError):
+        backtest(sample(10), **kwargs)

@@ -24,6 +24,7 @@ jobs:
           node --test tests/ui-smoke.test.cjs
 
   pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
